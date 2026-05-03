@@ -27,6 +27,18 @@
 - Reference tokens through their Tailwind utility names: `bg-base`, `text-copy-primary`, `border-surface-border`, `text-brand`, etc.
 - Maintain the border radius scale: `rounded-xl` for small elements, `rounded-2xl` for cards, `rounded-3xl` for modals.
 
+### Foreground contrast for editable inputs
+
+Editable form controls (`<Input>`, `<Textarea>`, `contenteditable` regions) must explicitly carry `text-copy-primary`. The shadcn `Input` / `Textarea` primitives ship with no foreground color of their own and inherit from their parent — and our dialog/popover wrappers default to `text-copy-secondary` (a dim color tuned for static body copy). Without an explicit override, typed text reads dimmer than the surrounding chrome and disappears against the elevated dark surface.
+
+Apply the rule whenever you mount an editable input:
+
+- Default: pass `className="text-copy-primary"` on the input itself, even if the visual currently looks fine — sibling wrapper changes can later darken the inherited color.
+- Static labels and helper text keep `text-copy-secondary` / `text-copy-muted`.
+- Read-only previews of user input (e.g. the create-dialog room-ID preview) may stay on `text-copy-secondary` since they aren't focusable surfaces.
+
+Reviewers should reject any new `<Input>` or `<Textarea>` inside a dialog, popover, sidebar overlay, or card wrapper that does not set `text-copy-primary`.
+
 ## API Routes
 
 - Validate and parse request input before any logic runs.

@@ -9,7 +9,7 @@ interface EditorNavbarProps {
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
   currentProjectName?: string;
-  showShare?: boolean;
+  onOpenShare?: () => void;
   isAiOpen?: boolean;
   onToggleAi?: () => void;
 }
@@ -18,7 +18,7 @@ export function EditorNavbar({
   isSidebarOpen,
   onToggleSidebar,
   currentProjectName,
-  showShare = false,
+  onOpenShare,
   isAiOpen = false,
   onToggleAi,
 }: EditorNavbarProps) {
@@ -44,8 +44,13 @@ export function EditorNavbar({
       </div>
       <div className="flex flex-1 items-center justify-center" />
       <div className="flex items-center gap-2">
-        {showShare ? (
-          <Button variant="outline" size="sm" aria-label="Share project">
+        {onOpenShare ? (
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Share project"
+            onClick={onOpenShare}
+          >
             <Share2 className="h-4 w-4" />
             Share
           </Button>

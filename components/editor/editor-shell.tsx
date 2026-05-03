@@ -6,15 +6,17 @@ import { AiSidebar } from "@/components/editor/ai-sidebar";
 import { CreateProjectDialog } from "@/components/editor/dialogs/create-project-dialog";
 import { DeleteProjectDialog } from "@/components/editor/dialogs/delete-project-dialog";
 import { RenameProjectDialog } from "@/components/editor/dialogs/rename-project-dialog";
+import { ShareDialog } from "@/components/editor/dialogs/share-dialog";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectDialogsProvider } from "@/components/editor/project-dialogs-context";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
 import { useProjectActions } from "@/hooks/use-project-actions";
-import type { ProjectListItem } from "@/lib/projects";
+import type { ProjectListItem, ProjectOwnership } from "@/lib/projects";
 
 export interface EditorShellCurrentProject {
   id: string;
   name: string;
+  ownership: ProjectOwnership;
 }
 
 interface EditorShellProps {
@@ -32,6 +34,7 @@ export function EditorShell({
 }: EditorShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const actions = useProjectActions();
 
   const contextValue = useMemo(
@@ -52,7 +55,9 @@ export function EditorShell({
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
           currentProjectName={currentProject?.name}
-          showShare={hasCurrentProject}
+          onOpenShare={
+            hasCurrentProject ? () => setIsShareOpen(true) : undefined
+          }
           isAiOpen={isAiOpen}
           onToggleAi={
             hasCurrentProject
@@ -102,6 +107,14 @@ export function EditorShell({
           isLoading={actions.isLoading}
           onClose={actions.close}
           onConfirm={actions.submitDelete}
+        />
+      ) : null}
+      {isShareOpen && currentProject ? (
+        <ShareDialog
+          projectId={currentProject.id}
+          projectName={currentProject.name}
+          isOwner={currentProject.ownership === "owned"}
+          onClose={() => setIsShareOpen(false)}
         />
       ) : null}
     </ProjectDialogsProvider>

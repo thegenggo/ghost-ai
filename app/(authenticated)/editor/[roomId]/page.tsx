@@ -34,7 +34,11 @@ export default async function ProjectWorkspacePage({ params }: PageProps) {
     <EditorShell
       ownedProjects={owned}
       sharedProjects={shared}
-      currentProject={{ id: access.id, name: access.name }}
+      currentProject={{
+        id: access.id,
+        name: access.name,
+        ownership: access.ownership,
+      }}
     >
       <div className="flex flex-1 items-center justify-center bg-base px-6 text-center">
         <p className="text-sm text-copy-muted">
