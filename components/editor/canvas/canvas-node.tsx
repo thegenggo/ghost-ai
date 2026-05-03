@@ -13,15 +13,19 @@ import { NodeColorToolbar } from "@/components/editor/canvas/node-color-toolbar"
 import { ShapeBackground } from "@/components/editor/canvas/shape-render";
 import { NODE_COLORS, type CanvasNode as CanvasNodeType } from "@/types/canvas";
 
-const HIDDEN_HANDLE_STYLE = {
-  width: 1,
-  height: 1,
-  minWidth: 1,
-  minHeight: 1,
-  background: "transparent",
-  border: "none",
-  opacity: 0,
+const CONNECTION_HANDLE_STYLE: CSSProperties = {
+  width: 8,
+  height: 8,
+  background: "#FFFFFF",
+  border: "1px solid var(--bg-base)",
 };
+
+const HANDLE_POSITIONS: { id: string; position: Position }[] = [
+  { id: "top", position: Position.Top },
+  { id: "right", position: Position.Right },
+  { id: "bottom", position: Position.Bottom },
+  { id: "left", position: Position.Left },
+];
 
 const REST_STROKE = "var(--border-subtle)";
 const SELECTED_STROKE = "var(--accent-primary)";
@@ -76,7 +80,7 @@ export function CanvasNode({
 
   return (
     <div
-      className="relative text-sm"
+      className="group relative text-sm"
       style={{
         width: width ?? undefined,
         height: height ?? undefined,
@@ -97,7 +101,6 @@ export function CanvasNode({
         selected={Boolean(selected)}
         activeColor={data.color}
       />
-      <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE_STYLE} />
       <ShapeBackground
         shape={data.shape}
         fill={palette.fill}
@@ -136,11 +139,16 @@ export function CanvasNode({
           />
         </div>
       )}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        style={HIDDEN_HANDLE_STYLE}
-      />
+      {HANDLE_POSITIONS.map(({ id: handleId, position }) => (
+        <Handle
+          key={handleId}
+          id={handleId}
+          type="source"
+          position={position}
+          style={CONNECTION_HANDLE_STYLE}
+          className="opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+        />
+      ))}
     </div>
   );
 }

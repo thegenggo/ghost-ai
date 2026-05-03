@@ -4,17 +4,21 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
+  MarkerType,
   MiniMap,
   Panel,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  type DefaultEdgeOptions,
+  type EdgeTypes,
   type NodeTypes,
 } from "@xyflow/react";
 import { useLiveblocksFlow } from "@liveblocks/react-flow";
 import { useCallback, useRef } from "react";
 import type { DragEvent } from "react";
 
+import { CanvasEdge as CanvasEdgeRenderer } from "@/components/editor/canvas/canvas-edge";
 import { CanvasNode } from "@/components/editor/canvas/canvas-node";
 import {
   ShapePanel,
@@ -22,6 +26,7 @@ import {
   type ShapeDragPayload,
 } from "@/components/editor/canvas/shape-panel";
 import {
+  CANVAS_EDGE_TYPE,
   CANVAS_NODE_TYPE,
   DEFAULT_NODE_COLOR,
   NODE_SHAPES,
@@ -34,6 +39,20 @@ import "@xyflow/react/dist/style.css";
 
 const NODE_TYPES: NodeTypes = {
   [CANVAS_NODE_TYPE]: CanvasNode,
+};
+
+const EDGE_TYPES: EdgeTypes = {
+  [CANVAS_EDGE_TYPE]: CanvasEdgeRenderer,
+};
+
+const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
+  type: CANVAS_EDGE_TYPE,
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    color: "#808090",
+    width: 16,
+    height: 16,
+  },
 };
 
 export function CanvasFlow() {
@@ -108,6 +127,8 @@ function CanvasFlowInner() {
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
+        defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
