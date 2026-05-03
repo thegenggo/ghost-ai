@@ -8,24 +8,30 @@ import { RenameProjectDialog } from "@/components/editor/dialogs/rename-project-
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectDialogsProvider } from "@/components/editor/project-dialogs-context";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
-import { useProjectDialogs } from "@/hooks/use-project-dialogs";
-import { MOCK_PROJECTS } from "@/lib/mock-projects";
+import { useProjectActions } from "@/hooks/use-project-actions";
+import type { ProjectListItem } from "@/lib/projects";
 
 interface EditorShellProps {
+  ownedProjects: ProjectListItem[];
+  sharedProjects: ProjectListItem[];
   children: ReactNode;
 }
 
-export function EditorShell({ children }: EditorShellProps) {
+export function EditorShell({
+  ownedProjects,
+  sharedProjects,
+  children,
+}: EditorShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const dialogs = useProjectDialogs();
+  const actions = useProjectActions();
 
   const contextValue = useMemo(
     () => ({
-      openCreate: dialogs.openCreate,
-      openRename: dialogs.openRename,
-      openDelete: dialogs.openDelete,
+      openCreate: actions.openCreate,
+      openRename: actions.openRename,
+      openDelete: actions.openDelete,
     }),
-    [dialogs.openCreate, dialogs.openRename, dialogs.openDelete]
+    [actions.openCreate, actions.openRename, actions.openDelete]
   );
 
   return (
@@ -37,36 +43,42 @@ export function EditorShell({ children }: EditorShellProps) {
         />
         <ProjectSidebar
           isOpen={isSidebarOpen}
-          projects={MOCK_PROJECTS}
+          ownedProjects={ownedProjects}
+          sharedProjects={sharedProjects}
           onClose={() => setIsSidebarOpen(false)}
-          onCreateProject={dialogs.openCreate}
-          onRenameProject={dialogs.openRename}
-          onDeleteProject={dialogs.openDelete}
+          onCreateProject={actions.openCreate}
+          onRenameProject={actions.openRename}
+          onDeleteProject={actions.openDelete}
         />
         <main className="flex flex-1 flex-col">{children}</main>
       </div>
 
-      {dialogs.dialog === "create" ? (
+      {actions.dialog === "create" ? (
         <CreateProjectDialog
-          isLoading={dialogs.isLoading}
-          onClose={dialogs.close}
-          onSubmit={dialogs.submitCreate}
+          name={actions.createName}
+          roomId={actions.createRoomId}
+          isLoading={actions.isLoading}
+          onNameChange={actions.setCreateName}
+          onClose={actions.close}
+          onSubmit={actions.submitCreate}
         />
       ) : null}
-      {dialogs.dialog === "rename" && dialogs.target ? (
+      {actions.dialog === "rename" && actions.renameTarget ? (
         <RenameProjectDialog
-          isLoading={dialogs.isLoading}
-          project={dialogs.target}
-          onClose={dialogs.close}
-          onSubmit={dialogs.submitRename}
+          project={actions.renameTarget}
+          name={actions.renameName}
+          isLoading={actions.isLoading}
+          onNameChange={actions.setRenameName}
+          onClose={actions.close}
+          onSubmit={actions.submitRename}
         />
       ) : null}
-      {dialogs.dialog === "delete" && dialogs.target ? (
+      {actions.dialog === "delete" && actions.deleteTarget ? (
         <DeleteProjectDialog
-          isLoading={dialogs.isLoading}
-          project={dialogs.target}
-          onClose={dialogs.close}
-          onConfirm={dialogs.submitDelete}
+          project={actions.deleteTarget}
+          isLoading={actions.isLoading}
+          onClose={actions.close}
+          onConfirm={actions.submitDelete}
         />
       ) : null}
     </ProjectDialogsProvider>
