@@ -9,6 +9,7 @@ import {
 } from "@xyflow/react";
 import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 
+import { NodeColorToolbar } from "@/components/editor/canvas/node-color-toolbar";
 import { ShapeBackground } from "@/components/editor/canvas/shape-render";
 import { NODE_COLORS, type CanvasNode as CanvasNodeType } from "@/types/canvas";
 
@@ -90,6 +91,11 @@ export function CanvasNode({
         color={RESIZE_HANDLE_COLOR}
         handleStyle={RESIZE_HANDLE_STYLE}
         lineStyle={RESIZE_LINE_STYLE}
+      />
+      <NodeColorToolbar
+        nodeId={id}
+        selected={Boolean(selected)}
+        activeColor={data.color}
       />
       <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE_STYLE} />
       <ShapeBackground
