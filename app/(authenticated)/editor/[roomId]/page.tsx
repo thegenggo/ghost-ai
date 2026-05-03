@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AccessDenied } from "@/components/editor/access-denied";
+import { Canvas } from "@/components/editor/canvas/canvas";
 import { EditorShell } from "@/components/editor/editor-shell";
 import { checkProjectAccess, getCurrentIdentity } from "@/lib/project-access";
 import { getUserProjects } from "@/lib/projects";
@@ -40,13 +41,7 @@ export default async function ProjectWorkspacePage({ params }: PageProps) {
         ownership: access.ownership,
       }}
     >
-      <div className="flex flex-1 items-center justify-center bg-base px-6 text-center">
-        <p className="text-sm text-copy-muted">
-          Canvas for{" "}
-          <span className="font-mono text-copy-secondary">{access.id}</span> —
-          coming soon
-        </p>
-      </div>
+      <Canvas roomId={access.id} />
     </EditorShell>
   );
 }
