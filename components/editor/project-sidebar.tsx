@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import Link from "next/link";
 import {
   FolderOpen,
   MoreHorizontal,
@@ -27,6 +28,7 @@ interface ProjectSidebarProps {
   isOpen: boolean;
   ownedProjects: ProjectListItem[];
   sharedProjects: ProjectListItem[];
+  currentProjectId?: string;
   onClose: () => void;
   onCreateProject: () => void;
   onRenameProject: (project: ProjectListItem) => void;
@@ -37,6 +39,7 @@ export function ProjectSidebar({
   isOpen,
   ownedProjects,
   sharedProjects,
+  currentProjectId,
   onClose,
   onCreateProject,
   onRenameProject,
@@ -101,6 +104,7 @@ export function ProjectSidebar({
               ) : (
                 <ProjectList
                   projects={ownedProjects}
+                  currentProjectId={currentProjectId}
                   showActions
                   onRename={onRenameProject}
                   onDelete={onDeleteProject}
@@ -116,7 +120,10 @@ export function ProjectSidebar({
                   description="Projects shared by collaborators will appear here."
                 />
               ) : (
-                <ProjectList projects={sharedProjects} />
+                <ProjectList
+                  projects={sharedProjects}
+                  currentProjectId={currentProjectId}
+                />
               )}
             </TabsContent>
           </Tabs>
@@ -140,6 +147,7 @@ export function ProjectSidebar({
 
 interface ProjectListProps {
   projects: ProjectListItem[];
+  currentProjectId?: string;
   showActions?: boolean;
   onRename?: (project: ProjectListItem) => void;
   onDelete?: (project: ProjectListItem) => void;
@@ -147,55 +155,73 @@ interface ProjectListProps {
 
 function ProjectList({
   projects,
+  currentProjectId,
   showActions = false,
   onRename,
   onDelete,
 }: ProjectListProps) {
   return (
     <ul className="flex flex-col gap-1">
-      {projects.map((project) => (
-        <li key={project.id}>
-          <div className="group flex items-center gap-1 rounded-xl px-2 py-1.5 hover:bg-subtle">
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm text-copy-primary">
-                {project.name}
-              </span>
-              <span className="truncate font-mono text-xs text-copy-faint">
-                {project.id}
-              </span>
-            </div>
-            {showActions && onRename && onDelete ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={`Actions for ${project.name}`}
-                      className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
-                    />
-                  }
+      {projects.map((project) => {
+        const isCurrent = project.id === currentProjectId;
+        return (
+          <li key={project.id}>
+            <div
+              className={cn(
+                "group flex items-center gap-1 rounded-xl px-2 py-1.5 transition-colors",
+                isCurrent ? "bg-brand-dim" : "hover:bg-subtle",
+              )}
+            >
+              <Link
+                href={`/editor/${project.id}`}
+                aria-current={isCurrent ? "page" : undefined}
+                className="flex min-w-0 flex-1 flex-col rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <span
+                  className={cn(
+                    "truncate text-sm",
+                    isCurrent ? "text-brand" : "text-copy-primary",
+                  )}
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5 text-copy-secondary" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-36">
-                  <DropdownMenuItem onClick={() => onRename(project)}>
-                    <Pencil className="h-4 w-4" />
-                    Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => onDelete(project)}
+                  {project.name}
+                </span>
+                <span className="truncate font-mono text-xs text-copy-faint">
+                  {project.id}
+                </span>
+              </Link>
+              {showActions && onRename && onDelete ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Actions for ${project.name}`}
+                        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+                      />
+                    }
                   >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-          </div>
-        </li>
-      ))}
+                    <MoreHorizontal className="h-3.5 w-3.5 text-copy-secondary" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-36">
+                    <DropdownMenuItem onClick={() => onRename(project)}>
+                      <Pencil className="h-4 w-4" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => onDelete(project)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
+import { AiSidebar } from "@/components/editor/ai-sidebar";
 import { CreateProjectDialog } from "@/components/editor/dialogs/create-project-dialog";
 import { DeleteProjectDialog } from "@/components/editor/dialogs/delete-project-dialog";
 import { RenameProjectDialog } from "@/components/editor/dialogs/rename-project-dialog";
@@ -11,18 +12,26 @@ import { ProjectSidebar } from "@/components/editor/project-sidebar";
 import { useProjectActions } from "@/hooks/use-project-actions";
 import type { ProjectListItem } from "@/lib/projects";
 
+export interface EditorShellCurrentProject {
+  id: string;
+  name: string;
+}
+
 interface EditorShellProps {
   ownedProjects: ProjectListItem[];
   sharedProjects: ProjectListItem[];
+  currentProject?: EditorShellCurrentProject;
   children: ReactNode;
 }
 
 export function EditorShell({
   ownedProjects,
   sharedProjects,
+  currentProject,
   children,
 }: EditorShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
   const actions = useProjectActions();
 
   const contextValue = useMemo(
@@ -34,23 +43,37 @@ export function EditorShell({
     [actions.openCreate, actions.openRename, actions.openDelete]
   );
 
+  const hasCurrentProject = Boolean(currentProject);
+
   return (
     <ProjectDialogsProvider value={contextValue}>
       <div className="flex min-h-screen flex-col bg-base">
         <EditorNavbar
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+          currentProjectName={currentProject?.name}
+          showShare={hasCurrentProject}
+          isAiOpen={isAiOpen}
+          onToggleAi={
+            hasCurrentProject
+              ? () => setIsAiOpen((open) => !open)
+              : undefined
+          }
         />
         <ProjectSidebar
           isOpen={isSidebarOpen}
           ownedProjects={ownedProjects}
           sharedProjects={sharedProjects}
+          currentProjectId={currentProject?.id}
           onClose={() => setIsSidebarOpen(false)}
           onCreateProject={actions.openCreate}
           onRenameProject={actions.openRename}
           onDeleteProject={actions.openDelete}
         />
         <main className="flex flex-1 flex-col">{children}</main>
+        {hasCurrentProject ? (
+          <AiSidebar isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
+        ) : null}
       </div>
 
       {actions.dialog === "create" ? (
