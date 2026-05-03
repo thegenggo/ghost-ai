@@ -44,3 +44,5 @@ next-env.d.ts
 .agents/
 .claude/
 skills-lock.json
+
+/app/generated/prisma
