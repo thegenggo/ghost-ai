@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 
+import { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 interface RouteContext {
@@ -26,20 +27,18 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return Response.json({ error: "name is required" }, { status: 400 });
   }
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (!project) {
-    return Response.json({ error: "Not found" }, { status: 404 });
+  try {
+    const updated = await prisma.project.update({
+      where: { id: projectId, ownerId: userId },
+      data: { name },
+    });
+    return Response.json({ project: updated });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    throw error;
   }
-  if (project.ownerId !== userId) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const updated = await prisma.project.update({
-    where: { id: projectId },
-    data: { name },
-  });
-
-  return Response.json({ project: updated });
 }
 
 export async function DELETE(_request: Request, { params }: RouteContext) {
@@ -50,17 +49,15 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
   const { projectId } = await params;
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (!project) {
-    return Response.json({ error: "Not found" }, { status: 404 });
+  try {
+    await prisma.project.delete({ where: { id: projectId, ownerId: userId } });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    throw error;
   }
-  if (project.ownerId !== userId) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  await prisma.project.delete({ where: { id: projectId } });
-
-  return new Response(null, { status: 204 });
 }
 
 function readNonEmptyString(body: unknown, key: string): string | null {

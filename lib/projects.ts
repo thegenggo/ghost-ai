@@ -1,6 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 
-import type { Project } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type ProjectOwnership = "owned" | "shared";
@@ -29,9 +28,10 @@ export async function getUserProjects(): Promise<UserProjects> {
   const ownedQuery = prisma.project.findMany({
     where: { ownerId: userId },
     orderBy: { createdAt: "desc" },
+    select: { id: true, name: true },
   });
 
-  const sharedQuery: Promise<Project[]> =
+  const sharedQuery: Promise<{ id: string; name: string }[]> =
     emails.length === 0
       ? Promise.resolve([])
       : prisma.project.findMany({
@@ -40,6 +40,7 @@ export async function getUserProjects(): Promise<UserProjects> {
             collaborators: { some: { email: { in: emails } } },
           },
           orderBy: { createdAt: "desc" },
+          select: { id: true, name: true },
         });
 
   const [owned, shared] = await Promise.all([ownedQuery, sharedQuery]);
@@ -50,6 +51,6 @@ export async function getUserProjects(): Promise<UserProjects> {
   };
 }
 
-function toListItem(project: Project, ownership: ProjectOwnership): ProjectListItem {
+function toListItem(project: { id: string; name: string }, ownership: ProjectOwnership): ProjectListItem {
   return { id: project.id, name: project.name, ownership };
 }

@@ -59,8 +59,8 @@ export function useProjectActions(): UseProjectActions {
   );
 
   const createRoomId = useMemo(() => {
-    const slug = slugify(createName);
-    if (!slug || !createSuffix) return "";
+    if (!createSuffix) return "";
+    const slug = slugify(createName) || "project";
     return `${slug}-${createSuffix}`;
   }, [createName, createSuffix]);
 

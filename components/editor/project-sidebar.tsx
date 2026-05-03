@@ -91,7 +91,7 @@ export function ProjectSidebar({
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="mine" className="mt-3 flex-1">
+            <TabsContent value="mine" className="mt-3 flex-1 min-h-0 overflow-y-auto">
               {ownedProjects.length === 0 ? (
                 <EmptyState
                   icon={<FolderOpen className="h-8 w-8 text-copy-faint" />}
@@ -108,7 +108,7 @@ export function ProjectSidebar({
               )}
             </TabsContent>
 
-            <TabsContent value="shared" className="mt-3 flex-1">
+            <TabsContent value="shared" className="mt-3 flex-1 min-h-0 overflow-y-auto">
               {sharedProjects.length === 0 ? (
                 <EmptyState
                   icon={<Users className="h-8 w-8 text-copy-faint" />}

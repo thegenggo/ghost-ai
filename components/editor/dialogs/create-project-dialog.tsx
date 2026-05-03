@@ -82,12 +82,9 @@ export function CreateProjectDialog({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <label
-            htmlFor={roomIdId}
-            className="text-xs font-medium text-copy-secondary"
-          >
+          <span className="text-xs font-medium text-copy-secondary">
             Room ID preview
-          </label>
+          </span>
           <div
             id={roomIdId}
             aria-live="polite"
