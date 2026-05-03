@@ -2,11 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { EditorDialog } from "@/components/editor/editor-dialog";
-import type { MockProject } from "@/lib/mock-projects";
+import type { ProjectListItem } from "@/lib/projects";
 
 interface DeleteProjectDialogProps {
   isLoading: boolean;
-  project: MockProject;
+  project: ProjectListItem;
   onClose: () => void;
   onConfirm: () => void | Promise<void>;
 }

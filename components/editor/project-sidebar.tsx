@@ -21,28 +21,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import type { MockProject } from "@/lib/mock-projects";
+import type { ProjectListItem } from "@/lib/projects";
 
 interface ProjectSidebarProps {
   isOpen: boolean;
-  projects: MockProject[];
+  ownedProjects: ProjectListItem[];
+  sharedProjects: ProjectListItem[];
   onClose: () => void;
   onCreateProject: () => void;
-  onRenameProject: (project: MockProject) => void;
-  onDeleteProject: (project: MockProject) => void;
+  onRenameProject: (project: ProjectListItem) => void;
+  onDeleteProject: (project: ProjectListItem) => void;
 }
 
 export function ProjectSidebar({
   isOpen,
-  projects,
+  ownedProjects,
+  sharedProjects,
   onClose,
   onCreateProject,
   onRenameProject,
   onDeleteProject,
 }: ProjectSidebarProps) {
-  const ownedProjects = projects.filter((p) => p.ownership === "owned");
-  const sharedProjects = projects.filter((p) => p.ownership === "shared");
-
   return (
     <>
       <div
@@ -140,10 +139,10 @@ export function ProjectSidebar({
 }
 
 interface ProjectListProps {
-  projects: MockProject[];
+  projects: ProjectListItem[];
   showActions?: boolean;
-  onRename?: (project: MockProject) => void;
-  onDelete?: (project: MockProject) => void;
+  onRename?: (project: ProjectListItem) => void;
+  onDelete?: (project: ProjectListItem) => void;
 }
 
 function ProjectList({
@@ -162,7 +161,7 @@ function ProjectList({
                 {project.name}
               </span>
               <span className="truncate font-mono text-xs text-copy-faint">
-                {project.slug}
+                {project.id}
               </span>
             </div>
             {showActions && onRename && onDelete ? (

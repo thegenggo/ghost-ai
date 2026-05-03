@@ -1,27 +1,30 @@
 "use client";
 
-import { useCallback, useId, useState, type FormEvent } from "react";
+import { useCallback, useId, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EditorDialog } from "@/components/editor/editor-dialog";
-import type { MockProject } from "@/lib/mock-projects";
+import type { ProjectListItem } from "@/lib/projects";
 
 interface RenameProjectDialogProps {
+  project: ProjectListItem;
+  name: string;
   isLoading: boolean;
-  project: MockProject;
+  onNameChange: (name: string) => void;
   onClose: () => void;
-  onSubmit: (name: string) => void | Promise<void>;
+  onSubmit: () => void | Promise<void>;
 }
 
 export function RenameProjectDialog({
-  isLoading,
   project,
+  name,
+  isLoading,
+  onNameChange,
   onClose,
   onSubmit,
 }: RenameProjectDialogProps) {
   const nameId = useId();
-  const [name, setName] = useState(project.name);
 
   const focusAndSelect = useCallback((node: HTMLInputElement | null) => {
     if (node) {
@@ -37,7 +40,7 @@ export function RenameProjectDialog({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
-    void onSubmit(trimmed);
+    void onSubmit();
   }
 
   return (
@@ -79,7 +82,7 @@ export function RenameProjectDialog({
             id={nameId}
             ref={focusAndSelect}
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => onNameChange(event.target.value)}
             autoComplete="off"
             className="text-copy-primary"
           />

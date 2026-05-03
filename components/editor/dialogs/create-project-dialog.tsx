@@ -1,36 +1,39 @@
 "use client";
 
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useId, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EditorDialog } from "@/components/editor/editor-dialog";
-import { slugify } from "@/lib/slugify";
 
 interface CreateProjectDialogProps {
+  name: string;
+  roomId: string;
   isLoading: boolean;
+  onNameChange: (name: string) => void;
   onClose: () => void;
-  onSubmit: (name: string) => void | Promise<void>;
+  onSubmit: () => void | Promise<void>;
 }
 
 export function CreateProjectDialog({
+  name,
+  roomId,
   isLoading,
+  onNameChange,
   onClose,
   onSubmit,
 }: CreateProjectDialogProps) {
   const nameId = useId();
-  const slugId = useId();
-  const [name, setName] = useState("");
+  const roomIdId = useId();
 
-  const slugPreview = useMemo(() => slugify(name), [name]);
   const trimmedName = name.trim();
   const canSubmit =
-    trimmedName.length > 0 && slugPreview.length > 0 && !isLoading;
+    trimmedName.length > 0 && roomId.length > 0 && !isLoading;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) return;
-    void onSubmit(trimmedName);
+    void onSubmit();
   }
 
   return (
@@ -71,7 +74,7 @@ export function CreateProjectDialog({
           <Input
             id={nameId}
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => onNameChange(event.target.value)}
             placeholder="e.g. Realtime Chat Platform"
             autoFocus
             autoComplete="off"
@@ -80,18 +83,18 @@ export function CreateProjectDialog({
         </div>
         <div className="flex flex-col gap-2">
           <label
-            htmlFor={slugId}
+            htmlFor={roomIdId}
             className="text-xs font-medium text-copy-secondary"
           >
-            Slug preview
+            Room ID preview
           </label>
           <div
-            id={slugId}
+            id={roomIdId}
             aria-live="polite"
             className="rounded-lg border border-surface-border bg-base px-2.5 py-1.5 font-mono text-sm text-copy-secondary"
           >
-            {slugPreview || (
-              <span className="text-copy-faint">your-project-slug</span>
+            {roomId || (
+              <span className="text-copy-faint">your-project-room-id</span>
             )}
           </div>
         </div>
