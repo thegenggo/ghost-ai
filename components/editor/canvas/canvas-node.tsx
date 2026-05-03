@@ -2,6 +2,7 @@
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
+import { ShapeBackground } from "@/components/editor/canvas/shape-render";
 import { NODE_COLORS, type CanvasNode as CanvasNodeType } from "@/types/canvas";
 
 const HIDDEN_HANDLE_STYLE = {
@@ -14,22 +15,43 @@ const HIDDEN_HANDLE_STYLE = {
   opacity: 0,
 };
 
-export function CanvasNode({ data, width, height }: NodeProps<CanvasNodeType>) {
+const REST_STROKE = "var(--border-subtle)";
+const SELECTED_STROKE = "var(--accent-primary)";
+
+export function CanvasNode({
+  data,
+  width,
+  height,
+  selected,
+}: NodeProps<CanvasNodeType>) {
   const palette =
     NODE_COLORS.find((color) => color.id === data.color) ?? NODE_COLORS[0];
+  const w = width ?? 0;
+  const h = height ?? 0;
+  const stroke = selected ? SELECTED_STROKE : REST_STROKE;
+  const strokeWidth = selected ? 2 : 1;
 
   return (
     <div
-      className="flex items-center justify-center rounded-md border border-surface-border px-3 py-2 text-sm"
+      className="relative text-sm"
       style={{
         width: width ?? undefined,
         height: height ?? undefined,
-        backgroundColor: palette.fill,
         color: palette.text,
       }}
     >
       <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE_STYLE} />
-      <span className="truncate text-center">{data.label}</span>
+      <ShapeBackground
+        shape={data.shape}
+        fill={palette.fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        width={w}
+        height={h}
+      />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-3 py-2">
+        <span className="truncate text-center">{data.label}</span>
+      </div>
       <Handle
         type="source"
         position={Position.Bottom}
