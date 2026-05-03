@@ -168,7 +168,7 @@ function ProjectList({
           <li key={project.id}>
             <div
               className={cn(
-                "group flex items-center gap-1 rounded-xl px-2 py-1.5 transition-colors",
+                "group flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors",
                 isCurrent ? "bg-brand-dim" : "hover:bg-subtle",
               )}
             >
