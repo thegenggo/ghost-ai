@@ -28,6 +28,13 @@ const features: FeatureItem[] = [
   },
 ];
 
+/**
+ * Renders a marketing panel for authentication screens that promotes Ghost AI and its key features.
+ *
+ * Displays a branded header, a headline with supporting copy, a list of features (icon, title, description), and a footer that shows the current year.
+ *
+ * @returns The JSX element for the marketing panel.
+ */
 export function AuthMarketingPanel() {
   return (
     <div className="flex h-full flex-col justify-between gap-12 px-12 py-12">

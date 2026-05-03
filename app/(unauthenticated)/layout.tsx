@@ -2,6 +2,15 @@ import type { ReactNode } from "react";
 
 import { AuthMarketingPanel } from "@/components/auth/auth-marketing-panel";
 
+/**
+ * Renders a responsive two-column layout intended for unauthenticated pages.
+ *
+ * The layout shows a marketing panel in the left column on large screens and places
+ * `children` centered in the main column.
+ *
+ * @param children - Content to render in the main column of the layout
+ * @returns The layout's JSX element wrapping the provided `children`
+ */
 export default function UnauthenticatedLayout({
   children,
 }: {

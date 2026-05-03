@@ -9,6 +9,14 @@ interface EditorShellProps {
   children: ReactNode;
 }
 
+/**
+ * Top-level layout for the editor page that provides navigation, a project sidebar, and a main content area.
+ *
+ * Manages internal open/closed state for the project sidebar and wires that state to the navbar and sidebar controls.
+ *
+ * @param children - Content to render inside the editor's main area
+ * @returns The editor shell as a React element
+ */
 export function EditorShell({ children }: EditorShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 

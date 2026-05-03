@@ -19,6 +19,12 @@ export const metadata: Metadata = {
   description: "Real-time collaborative system design workspace",
 };
 
+/**
+ * Root layout component that renders the top-level HTML and body structure, applies global fonts and dark mode, and wraps the application with ClerkProvider configured to use the dark theme and CSS-variable based appearance.
+ *
+ * @param children - Application content to render inside the layout
+ * @returns The root HTML/Body JSX tree containing the provided `children` wrapped by a configured `ClerkProvider`
+ */
 export default function RootLayout({
   children,
 }: Readonly<{

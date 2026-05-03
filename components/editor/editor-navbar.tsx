@@ -10,6 +10,13 @@ interface EditorNavbarProps {
   onToggleSidebar: () => void;
 }
 
+/**
+ * Renders the editor's top navigation bar with a sidebar toggle and user button.
+ *
+ * @param isSidebarOpen - Whether the left sidebar is currently open
+ * @param onToggleSidebar - Callback invoked when the sidebar toggle button is clicked
+ * @returns The header element containing the sidebar toggle, centered spacer, and user button
+ */
 export function EditorNavbar({
   isSidebarOpen,
   onToggleSidebar,
