@@ -50,7 +50,7 @@ export function EditorShell({
 
   return (
     <ProjectDialogsProvider value={contextValue}>
-      <div className="flex min-h-screen flex-col bg-base">
+      <div className="flex h-screen flex-col bg-base">
         <EditorNavbar
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
