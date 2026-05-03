@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { FolderOpen, Plus, Users, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,7 @@ export function ProjectSidebar({
     <aside
       aria-label="Projects"
       aria-hidden={!isOpen}
+      inert={!isOpen}
       className={cn(
         "pointer-events-none fixed top-16 bottom-4 left-3 z-40 w-72 rounded-2xl border border-surface-border bg-surface/95 shadow-2xl backdrop-blur-md transition-all duration-200 ease-out",
         isOpen
@@ -87,7 +90,7 @@ export function ProjectSidebar({
 }
 
 interface EmptyStateProps {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   description: string;
 }

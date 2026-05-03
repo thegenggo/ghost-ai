@@ -8,6 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
 
 interface EditorDialogProps {
@@ -15,9 +17,9 @@ interface EditorDialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
-  footer?: React.ReactNode;
+  footer?: ReactNode;
   className?: string;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
 export function EditorDialog({
