@@ -4,6 +4,7 @@ const signInUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/sign-in";
 const signUpUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL ?? "/sign-up";
 
 const isPublicRoute = createRouteMatcher([
+  "/",
   `${signInUrl}(.*)`,
   `${signUpUrl}(.*)`,
 ]);
