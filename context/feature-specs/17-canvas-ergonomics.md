@@ -49,6 +49,6 @@ Add a floating control bar for zoom and undo/redo, then wire the same actions to
 - Control bar is added to the canvas.
 - Zoom actions use the React Flow instance.
 - Undo and redo use Liveblocks history.
-- Keyboard shortcuts are handled in `hooks/useKeyboardShortcuts`.
+- Keyboard shortcuts are handled in `hooks/use-keyboard-shortcuts.ts`.
 - Shortcut handling skips editable fields.
 - `npm run build` passes.
