@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import { AiSidebar } from "@/components/editor/ai-sidebar";
+import { CanvasTemplatesProvider } from "@/components/editor/canvas-templates-context";
 import { CreateProjectDialog } from "@/components/editor/dialogs/create-project-dialog";
 import { DeleteProjectDialog } from "@/components/editor/dialogs/delete-project-dialog";
 import { RenameProjectDialog } from "@/components/editor/dialogs/rename-project-dialog";
@@ -35,6 +36,7 @@ export function EditorShell({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isStarterTemplatesOpen, setIsStarterTemplatesOpen] = useState(false);
   const actions = useProjectActions();
 
   const contextValue = useMemo(
@@ -46,40 +48,60 @@ export function EditorShell({
     [actions.openCreate, actions.openRename, actions.openDelete]
   );
 
+  const closeStarterTemplates = useCallback(
+    () => setIsStarterTemplatesOpen(false),
+    []
+  );
+
+  const templatesContextValue = useMemo(
+    () => ({
+      isOpen: isStarterTemplatesOpen,
+      close: closeStarterTemplates,
+    }),
+    [isStarterTemplatesOpen, closeStarterTemplates]
+  );
+
   const hasCurrentProject = Boolean(currentProject);
 
   return (
     <ProjectDialogsProvider value={contextValue}>
-      <div className="flex h-screen flex-col bg-base">
-        <EditorNavbar
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
-          currentProjectName={currentProject?.name}
-          onOpenShare={
-            hasCurrentProject ? () => setIsShareOpen(true) : undefined
-          }
-          isAiOpen={isAiOpen}
-          onToggleAi={
-            hasCurrentProject
-              ? () => setIsAiOpen((open) => !open)
-              : undefined
-          }
-        />
-        <ProjectSidebar
-          isOpen={isSidebarOpen}
-          ownedProjects={ownedProjects}
-          sharedProjects={sharedProjects}
-          currentProjectId={currentProject?.id}
-          onClose={() => setIsSidebarOpen(false)}
-          onCreateProject={actions.openCreate}
-          onRenameProject={actions.openRename}
-          onDeleteProject={actions.openDelete}
-        />
-        <main className="flex flex-1 flex-col">{children}</main>
-        {hasCurrentProject ? (
-          <AiSidebar isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
-        ) : null}
-      </div>
+      <CanvasTemplatesProvider value={templatesContextValue}>
+        <div className="flex h-screen flex-col bg-base">
+          <EditorNavbar
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+            currentProjectName={currentProject?.name}
+            onOpenShare={
+              hasCurrentProject ? () => setIsShareOpen(true) : undefined
+            }
+            onOpenStarterTemplates={
+              hasCurrentProject
+                ? () => setIsStarterTemplatesOpen(true)
+                : undefined
+            }
+            isAiOpen={isAiOpen}
+            onToggleAi={
+              hasCurrentProject
+                ? () => setIsAiOpen((open) => !open)
+                : undefined
+            }
+          />
+          <ProjectSidebar
+            isOpen={isSidebarOpen}
+            ownedProjects={ownedProjects}
+            sharedProjects={sharedProjects}
+            currentProjectId={currentProject?.id}
+            onClose={() => setIsSidebarOpen(false)}
+            onCreateProject={actions.openCreate}
+            onRenameProject={actions.openRename}
+            onDeleteProject={actions.openDelete}
+          />
+          <main className="flex flex-1 flex-col">{children}</main>
+          {hasCurrentProject ? (
+            <AiSidebar isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
+          ) : null}
+        </div>
+      </CanvasTemplatesProvider>
 
       {actions.dialog === "create" ? (
         <CreateProjectDialog

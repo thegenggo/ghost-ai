@@ -11,7 +11,9 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type DefaultEdgeOptions,
+  type EdgeChange,
   type EdgeTypes,
+  type NodeChange,
   type NodeTypes,
 } from "@xyflow/react";
 import { useLiveblocksFlow } from "@liveblocks/react-flow";
@@ -32,6 +34,9 @@ import {
   SHAPE_DRAG_MIME,
   type ShapeDragPayload,
 } from "@/components/editor/canvas/shape-panel";
+import { useCanvasTemplatesContext } from "@/components/editor/canvas-templates-context";
+import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
+import type { CanvasTemplate } from "@/components/editor/starter-templates";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import {
   CANVAS_EDGE_TYPE,
@@ -81,6 +86,7 @@ function CanvasFlowInner() {
   const reactFlow = useReactFlow<CanvasNodeData, CanvasEdge>();
   const { screenToFlowPosition } = reactFlow;
   const dropCounterRef = useRef(0);
+  const templatesContext = useCanvasTemplatesContext();
 
   const undo = useUndo();
   const redo = useRedo();
@@ -151,6 +157,76 @@ function CanvasFlowInner() {
     [onNodesChange, screenToFlowPosition],
   );
 
+  const handleImportTemplate = useCallback(
+    (template: CanvasTemplate) => {
+      const importStamp = `tpl-${Date.now()}-${dropCounterRef.current++}`;
+      const idMap = new Map<string, string>();
+      template.nodes.forEach((node) => {
+        idMap.set(node.id, `${importStamp}-${node.id}`);
+      });
+
+      const nextNodes: CanvasNodeData[] = template.nodes.map((node) => ({
+        ...node,
+        id: idMap.get(node.id) ?? node.id,
+        data: { ...node.data },
+        position: { ...node.position },
+      }));
+      const nextEdges: CanvasEdge[] = template.edges.map((edgeItem) => ({
+        ...edgeItem,
+        id: `${importStamp}-${edgeItem.id}`,
+        source: idMap.get(edgeItem.source) ?? edgeItem.source,
+        target: idMap.get(edgeItem.target) ?? edgeItem.target,
+        data: edgeItem.data ? { ...edgeItem.data } : undefined,
+      }));
+
+      const currentNodes = reactFlow.getNodes();
+      const currentEdges = reactFlow.getEdges();
+
+      const edgeChanges: EdgeChange<CanvasEdge>[] = [
+        ...currentEdges.map(
+          (edgeItem): EdgeChange<CanvasEdge> => ({
+            type: "remove",
+            id: edgeItem.id,
+          }),
+        ),
+        ...nextEdges.map(
+          (edgeItem): EdgeChange<CanvasEdge> => ({
+            type: "add",
+            item: edgeItem,
+          }),
+        ),
+      ];
+      const nodeChanges: NodeChange<CanvasNodeData>[] = [
+        ...currentNodes.map(
+          (node): NodeChange<CanvasNodeData> => ({
+            type: "remove",
+            id: node.id,
+          }),
+        ),
+        ...nextNodes.map(
+          (node): NodeChange<CanvasNodeData> => ({
+            type: "add",
+            item: node,
+          }),
+        ),
+      ];
+
+      if (edgeChanges.length > 0) {
+        onEdgesChange(edgeChanges);
+      }
+      if (nodeChanges.length > 0) {
+        onNodesChange(nodeChanges);
+      }
+
+      templatesContext?.close();
+
+      window.setTimeout(() => {
+        void reactFlow.fitView({ duration: 300, padding: 0.2 });
+      }, 80);
+    },
+    [onEdgesChange, onNodesChange, reactFlow, templatesContext],
+  );
+
   return (
     <div
       className="flex flex-1 bg-base"
@@ -205,6 +281,12 @@ function CanvasFlowInner() {
           <ShapePanel />
         </Panel>
       </ReactFlow>
+      {templatesContext?.isOpen ? (
+        <StarterTemplatesModal
+          onImport={handleImportTemplate}
+          onClose={templatesContext.close}
+        />
+      ) : null}
     </div>
   );
 }
