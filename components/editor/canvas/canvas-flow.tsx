@@ -11,9 +11,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type DefaultEdgeOptions,
-  type EdgeChange,
   type EdgeTypes,
-  type NodeChange,
   type NodeTypes,
 } from "@xyflow/react";
 import { useLiveblocksFlow } from "@liveblocks/react-flow";
@@ -182,40 +180,21 @@ function CanvasFlowInner() {
       const currentNodes = reactFlow.getNodes();
       const currentEdges = reactFlow.getEdges();
 
-      const edgeChanges: EdgeChange<CanvasEdge>[] = [
-        ...currentEdges.map(
-          (edgeItem): EdgeChange<CanvasEdge> => ({
-            type: "remove",
-            id: edgeItem.id,
-          }),
-        ),
-        ...nextEdges.map(
-          (edgeItem): EdgeChange<CanvasEdge> => ({
-            type: "add",
-            item: edgeItem,
-          }),
-        ),
-      ];
-      const nodeChanges: NodeChange<CanvasNodeData>[] = [
-        ...currentNodes.map(
-          (node): NodeChange<CanvasNodeData> => ({
-            type: "remove",
-            id: node.id,
-          }),
-        ),
-        ...nextNodes.map(
-          (node): NodeChange<CanvasNodeData> => ({
-            type: "add",
-            item: node,
-          }),
-        ),
-      ];
-
-      if (edgeChanges.length > 0) {
-        onEdgesChange(edgeChanges);
+      // useLiveblocksFlow ignores `{ type: "remove" }` changes; deletion is
+      // only persisted through the dedicated onDelete callback.
+      if (currentNodes.length > 0 || currentEdges.length > 0) {
+        onDelete({ nodes: currentNodes, edges: currentEdges });
       }
-      if (nodeChanges.length > 0) {
-        onNodesChange(nodeChanges);
+
+      if (nextNodes.length > 0) {
+        onNodesChange(
+          nextNodes.map((node) => ({ type: "add", item: node })),
+        );
+      }
+      if (nextEdges.length > 0) {
+        onEdgesChange(
+          nextEdges.map((edgeItem) => ({ type: "add", item: edgeItem })),
+        );
       }
 
       templatesContext?.close();
@@ -224,7 +203,7 @@ function CanvasFlowInner() {
         void reactFlow.fitView({ duration: 300, padding: 0.2 });
       }, 80);
     },
-    [onEdgesChange, onNodesChange, reactFlow, templatesContext],
+    [onDelete, onEdgesChange, onNodesChange, reactFlow, templatesContext],
   );
 
   return (
