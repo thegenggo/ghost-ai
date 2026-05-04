@@ -15,9 +15,16 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import { useLiveblocksFlow } from "@liveblocks/react-flow";
+import {
+  useCanRedo,
+  useCanUndo,
+  useRedo,
+  useUndo,
+} from "@liveblocks/react/suspense";
 import { useCallback, useRef } from "react";
 import type { DragEvent } from "react";
 
+import { CanvasControlBar } from "@/components/editor/canvas/canvas-control-bar";
 import { CanvasEdge as CanvasEdgeRenderer } from "@/components/editor/canvas/canvas-edge";
 import { CanvasNode } from "@/components/editor/canvas/canvas-node";
 import {
@@ -25,6 +32,7 @@ import {
   SHAPE_DRAG_MIME,
   type ShapeDragPayload,
 } from "@/components/editor/canvas/shape-panel";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import {
   CANVAS_EDGE_TYPE,
   CANVAS_NODE_TYPE,
@@ -70,8 +78,34 @@ function CanvasFlowInner() {
       nodes: { initial: [] },
       edges: { initial: [] },
     });
-  const { screenToFlowPosition } = useReactFlow();
+  const reactFlow = useReactFlow<CanvasNodeData, CanvasEdge>();
+  const { screenToFlowPosition } = reactFlow;
   const dropCounterRef = useRef(0);
+
+  const undo = useUndo();
+  const redo = useRedo();
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
+
+  const handleZoomIn = useCallback(() => {
+    void reactFlow.zoomIn({ duration: 200 });
+  }, [reactFlow]);
+
+  const handleZoomOut = useCallback(() => {
+    void reactFlow.zoomOut({ duration: 200 });
+  }, [reactFlow]);
+
+  const handleFitView = useCallback(() => {
+    void reactFlow.fitView({ duration: 300 });
+  }, [reactFlow]);
+
+  useKeyboardShortcuts({
+    reactFlow,
+    onUndo: undo,
+    onRedo: redo,
+    canUndo,
+    canRedo,
+  });
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes(SHAPE_DRAG_MIME)) {
@@ -156,6 +190,17 @@ function CanvasFlowInner() {
             borderRadius: "0.75rem",
           }}
         />
+        <Panel position="bottom-left">
+          <CanvasControlBar
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onFitView={handleFitView}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+          />
+        </Panel>
         <Panel position="bottom-center">
           <ShapePanel />
         </Panel>
