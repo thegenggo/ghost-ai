@@ -9,9 +9,14 @@ import {
   Square,
   type LucideIcon,
 } from "lucide-react";
-import type { DragEvent } from "react";
+import { useRef, type DragEvent } from "react";
 
-import type { NodeShape } from "@/types/canvas";
+import { ShapeBackground } from "@/components/editor/canvas/shape-render";
+import {
+  DEFAULT_NODE_COLOR,
+  NODE_COLORS,
+  type NodeShape,
+} from "@/types/canvas";
 
 export const SHAPE_DRAG_MIME = "application/x-ghost-shape";
 
@@ -38,7 +43,12 @@ const SHAPE_OPTIONS: ShapeOption[] = [
   { shape: "hexagon", label: "Hexagon", icon: Hexagon, width: 130, height: 110 },
 ];
 
+const PREVIEW_PALETTE =
+  NODE_COLORS.find((color) => color.id === DEFAULT_NODE_COLOR) ?? NODE_COLORS[0];
+
 export function ShapePanel() {
+  const previewRefs = useRef<Map<NodeShape, HTMLDivElement | null>>(new Map());
+
   function handleDragStart(
     event: DragEvent<HTMLButtonElement>,
     option: ShapeOption,
@@ -50,30 +60,71 @@ export function ShapePanel() {
     };
     event.dataTransfer.setData(SHAPE_DRAG_MIME, JSON.stringify(payload));
     event.dataTransfer.effectAllowed = "move";
+
+    const preview = previewRefs.current.get(option.shape);
+    if (preview) {
+      event.dataTransfer.setDragImage(
+        preview,
+        option.width / 2,
+        option.height / 2,
+      );
+    }
   }
 
   return (
-    <div
-      className="flex items-center gap-1 rounded-full border border-surface-border bg-elevated/95 px-2 py-1.5 shadow-lg backdrop-blur"
-      role="toolbar"
-      aria-label="Shape palette"
-    >
-      {SHAPE_OPTIONS.map((option) => {
-        const Icon = option.icon;
-        return (
-          <button
+    <>
+      <div
+        className="flex items-center gap-1 rounded-full border border-surface-border bg-elevated/95 px-2 py-1.5 shadow-lg backdrop-blur"
+        role="toolbar"
+        aria-label="Shape palette"
+      >
+        {SHAPE_OPTIONS.map((option) => {
+          const Icon = option.icon;
+          return (
+            <button
+              key={option.shape}
+              type="button"
+              draggable
+              onDragStart={(event) => handleDragStart(event, option)}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-copy-secondary transition-colors hover:bg-subtle hover:text-copy-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              aria-label={`Drag to add ${option.label}`}
+              title={`Drag to add ${option.label}`}
+            >
+              <Icon className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        aria-hidden
+        className="pointer-events-none fixed top-0"
+        style={{ left: -9999 }}
+      >
+        {SHAPE_OPTIONS.map((option) => (
+          <div
             key={option.shape}
-            type="button"
-            draggable
-            onDragStart={(event) => handleDragStart(event, option)}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-copy-secondary transition-colors hover:bg-subtle hover:text-copy-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            aria-label={`Drag to add ${option.label}`}
-            title={`Drag to add ${option.label}`}
+            ref={(el) => {
+              previewRefs.current.set(option.shape, el);
+            }}
+            className="relative"
+            style={{
+              width: option.width,
+              height: option.height,
+              color: PREVIEW_PALETTE.text,
+            }}
           >
-            <Icon className="h-5 w-5" strokeWidth={1.75} />
-          </button>
-        );
-      })}
-    </div>
+            <ShapeBackground
+              shape={option.shape}
+              fill={PREVIEW_PALETTE.fill}
+              stroke="#3a3a42"
+              strokeWidth={1}
+              width={option.width}
+              height={option.height}
+            />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
