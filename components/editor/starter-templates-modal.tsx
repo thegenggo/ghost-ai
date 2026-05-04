@@ -1,5 +1,6 @@
 "use client";
 
+import { Download } from "lucide-react";
 import { Fragment, useMemo } from "react";
 
 import { EditorDialog } from "@/components/editor/editor-dialog";
@@ -25,11 +26,20 @@ export function StarterTemplatesModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title="Start from a template"
-      description="Pick a starter diagram. Importing replaces your current canvas."
-      className="max-w-5xl"
+      title="Import Template"
+      description={
+        <>
+          Choose a starter template to pre-populate your canvas. Any existing
+          nodes will be replaced — use{" "}
+          <kbd className="inline-flex items-center rounded-md border border-surface-border bg-subtle px-1.5 py-0.5 font-mono text-[0.7rem] text-copy-secondary">
+            ⌘Z
+          </kbd>{" "}
+          to undo.
+        </>
+      }
+      className="sm:max-w-6xl"
     >
-      <div className="grid max-h-[60vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid max-h-[65vh] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
         {CANVAS_TEMPLATES.map((template) => (
           <TemplateCard
             key={template.id}
@@ -49,18 +59,17 @@ interface TemplateCardProps {
 
 function TemplateCard({ template, onImport }: TemplateCardProps) {
   return (
-    <div className="group flex flex-col gap-3 rounded-2xl border border-surface-border bg-surface/40 p-3 transition-colors hover:border-brand/50 hover:bg-surface/70 focus-within:border-brand/50 focus-within:bg-surface/70">
+    <div className="group flex flex-col gap-4 rounded-2xl border border-surface-border bg-surface/40 p-4 transition-colors hover:border-brand/50 hover:bg-surface/70 focus-within:border-brand/50 focus-within:bg-surface/70">
       <TemplatePreview template={template} />
-      <div className="flex flex-1 flex-col gap-1">
-        <h3 className="text-sm font-medium text-copy-primary">
+      <div className="flex flex-1 flex-col gap-2">
+        <h3 className="text-base font-semibold text-copy-primary">
           {template.name}
         </h3>
-        <p className="line-clamp-2 min-h-10 text-xs text-copy-muted">
-          {template.description}
-        </p>
+        <p className="text-sm text-copy-muted">{template.description}</p>
       </div>
-      <Button onClick={onImport} className="w-full">
-        Use template
+      <Button onClick={onImport} variant="outline" className="w-full">
+        <Download className="h-4 w-4" />
+        Import
       </Button>
     </div>
   );
