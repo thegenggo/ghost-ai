@@ -1,15 +1,20 @@
 "use client";
 
 import {
+  AlertCircle,
+  Check,
   LayoutTemplate,
+  Loader2,
   PanelLeftClose,
   PanelLeftOpen,
+  Save,
   Share2,
   Sparkles,
 } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 
 import { Button } from "@/components/ui/button";
+import type { CanvasSaveStatus } from "@/hooks/use-canvas-autosave";
 
 interface EditorNavbarProps {
   isSidebarOpen: boolean;
@@ -20,6 +25,8 @@ interface EditorNavbarProps {
   isAiOpen?: boolean;
   onToggleAi?: () => void;
   hideUserButton?: boolean;
+  saveStatus?: CanvasSaveStatus;
+  onSaveNow?: () => void;
 }
 
 export function EditorNavbar({
@@ -31,6 +38,8 @@ export function EditorNavbar({
   isAiOpen = false,
   onToggleAi,
   hideUserButton = false,
+  saveStatus,
+  onSaveNow,
 }: EditorNavbarProps) {
   const ToggleIcon = isSidebarOpen ? PanelLeftClose : PanelLeftOpen;
 
@@ -54,6 +63,9 @@ export function EditorNavbar({
       </div>
       <div className="flex flex-1 items-center justify-center" />
       <div className="flex items-center gap-2">
+        {onSaveNow ? (
+          <SaveButton status={saveStatus ?? "idle"} onClick={onSaveNow} />
+        ) : null}
         {onOpenStarterTemplates ? (
           <Button
             variant="outline"
@@ -91,4 +103,66 @@ export function EditorNavbar({
       </div>
     </header>
   );
+}
+
+function SaveButton({
+  status,
+  onClick,
+}: {
+  status: CanvasSaveStatus;
+  onClick: () => void;
+}) {
+  const { Icon, label, tone, spin } = describeSaveStatus(status);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={onClick}
+      aria-label={`Save canvas — ${label}`}
+      title={label}
+      className={tone}
+    >
+      <Icon className={`h-4 w-4 ${spin ? "animate-spin" : ""}`} />
+      {label}
+    </Button>
+  );
+}
+
+function describeSaveStatus(status: CanvasSaveStatus): {
+  Icon: typeof Save;
+  label: string;
+  tone: string;
+  spin: boolean;
+} {
+  switch (status) {
+    case "saving":
+      return {
+        Icon: Loader2,
+        label: "Saving…",
+        tone: "text-copy-muted",
+        spin: true,
+      };
+    case "saved":
+      return {
+        Icon: Check,
+        label: "Saved",
+        tone: "text-success",
+        spin: false,
+      };
+    case "error":
+      return {
+        Icon: AlertCircle,
+        label: "Save failed",
+        tone: "text-error",
+        spin: false,
+      };
+    case "idle":
+    default:
+      return {
+        Icon: Save,
+        label: "Save",
+        tone: "text-copy-secondary",
+        spin: false,
+      };
+  }
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AccessDenied } from "@/components/editor/access-denied";
 import { Canvas } from "@/components/editor/canvas/canvas";
 import { EditorShell } from "@/components/editor/editor-shell";
+import { getSavedCanvas } from "@/lib/canvas-storage";
 import { checkProjectAccess, getCurrentIdentity } from "@/lib/project-access";
 import { getUserProjects } from "@/lib/projects";
 
@@ -31,6 +32,8 @@ export default async function ProjectWorkspacePage({ params }: PageProps) {
     );
   }
 
+  const savedCanvas = await getSavedCanvas(access.id);
+
   return (
     <EditorShell
       ownedProjects={owned}
@@ -41,7 +44,7 @@ export default async function ProjectWorkspacePage({ params }: PageProps) {
         ownership: access.ownership,
       }}
     >
-      <Canvas roomId={access.id} />
+      <Canvas roomId={access.id} savedCanvas={savedCanvas} />
     </EditorShell>
   );
 }

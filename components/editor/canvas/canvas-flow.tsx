@@ -22,7 +22,7 @@ import {
   useUndo,
   useUpdateMyPresence,
 } from "@liveblocks/react/suspense";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
 
 import { CanvasControlBar } from "@/components/editor/canvas/canvas-control-bar";
@@ -35,10 +35,13 @@ import {
   SHAPE_DRAG_MIME,
   type ShapeDragPayload,
 } from "@/components/editor/canvas/shape-panel";
+import { useCanvasSaveContext } from "@/components/editor/canvas-save-context";
 import { useCanvasTemplatesContext } from "@/components/editor/canvas-templates-context";
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
 import type { CanvasTemplate } from "@/components/editor/starter-templates";
+import { useCanvasAutosave } from "@/hooks/use-canvas-autosave";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import type { SavedCanvas } from "@/lib/canvas-storage";
 import {
   CANVAS_EDGE_TYPE,
   CANVAS_NODE_TYPE,
@@ -69,20 +72,25 @@ const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
   },
 };
 
-export function CanvasFlow() {
+interface CanvasFlowProps {
+  projectId: string;
+  savedCanvas: SavedCanvas | null;
+}
+
+export function CanvasFlow({ projectId, savedCanvas }: CanvasFlowProps) {
   return (
     <ReactFlowProvider>
-      <CanvasFlowInner />
+      <CanvasFlowInner projectId={projectId} savedCanvas={savedCanvas} />
     </ReactFlowProvider>
   );
 }
 
-function CanvasFlowInner() {
+function CanvasFlowInner({ projectId, savedCanvas }: CanvasFlowProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } =
     useLiveblocksFlow<CanvasNodeData, CanvasEdge>({
       suspense: true,
-      nodes: { initial: [] },
-      edges: { initial: [] },
+      nodes: { initial: savedCanvas?.nodes ?? [] },
+      edges: { initial: savedCanvas?.edges ?? [] },
     });
   const reactFlow = useReactFlow<CanvasNodeData, CanvasEdge>();
   const { screenToFlowPosition } = reactFlow;
@@ -94,6 +102,25 @@ function CanvasFlowInner() {
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
   const updateMyPresence = useUpdateMyPresence();
+  const saveContext = useCanvasSaveContext();
+
+  const { status: saveStatus, saveNow } = useCanvasAutosave({
+    projectId,
+    nodes,
+    edges,
+    enabled: true,
+  });
+
+  useEffect(() => {
+    saveContext?.reportStatus(saveStatus);
+  }, [saveContext, saveStatus]);
+
+  useEffect(() => {
+    saveContext?.registerSaveNow(saveNow);
+    return () => {
+      saveContext?.registerSaveNow(null);
+    };
+  }, [saveContext, saveNow]);
 
   const handleZoomIn = useCallback(() => {
     void reactFlow.zoomIn({ duration: 200 });
