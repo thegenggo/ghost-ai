@@ -180,7 +180,7 @@ function ArchitectTab() {
               >
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap",
+                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere",
                     message.role === "user"
                       ? "border-2 border-brand/50 bg-brand-dim text-copy-primary"
                       : "border border-surface-border bg-elevated text-ai-text"
