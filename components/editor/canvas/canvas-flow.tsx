@@ -20,13 +20,16 @@ import {
   useCanUndo,
   useRedo,
   useUndo,
+  useUpdateMyPresence,
 } from "@liveblocks/react/suspense";
 import { useCallback, useRef } from "react";
-import type { DragEvent } from "react";
+import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
 
 import { CanvasControlBar } from "@/components/editor/canvas/canvas-control-bar";
 import { CanvasEdge as CanvasEdgeRenderer } from "@/components/editor/canvas/canvas-edge";
 import { CanvasNode } from "@/components/editor/canvas/canvas-node";
+import { LiveCursors } from "@/components/editor/canvas/live-cursors";
+import { PresenceAvatars } from "@/components/editor/canvas/presence-avatars";
 import {
   ShapePanel,
   SHAPE_DRAG_MIME,
@@ -90,6 +93,7 @@ function CanvasFlowInner() {
   const redo = useRedo();
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
+  const updateMyPresence = useUpdateMyPresence();
 
   const handleZoomIn = useCallback(() => {
     void reactFlow.zoomIn({ duration: 200 });
@@ -110,6 +114,21 @@ function CanvasFlowInner() {
     canUndo,
     canRedo,
   });
+
+  const handleMouseMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const point = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      updateMyPresence({ cursor: { x: point.x, y: point.y } });
+    },
+    [screenToFlowPosition, updateMyPresence],
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    updateMyPresence({ cursor: null });
+  }, [updateMyPresence]);
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes(SHAPE_DRAG_MIME)) {
@@ -208,7 +227,7 @@ function CanvasFlowInner() {
 
   return (
     <div
-      className="flex flex-1 bg-base"
+      className="relative flex flex-1 bg-base"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -222,6 +241,8 @@ function CanvasFlowInner() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onDelete={onDelete}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         connectionMode={ConnectionMode.Loose}
         fitView
         proOptions={{ hideAttribution: true }}
@@ -259,7 +280,11 @@ function CanvasFlowInner() {
         <Panel position="bottom-center">
           <ShapePanel />
         </Panel>
+        <Panel position="top-right">
+          <PresenceAvatars />
+        </Panel>
       </ReactFlow>
+      <LiveCursors />
       {templatesContext?.isOpen ? (
         <StarterTemplatesModal
           onImport={handleImportTemplate}

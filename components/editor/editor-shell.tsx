@@ -85,6 +85,7 @@ export function EditorShell({
                 ? () => setIsAiOpen((open) => !open)
                 : undefined
             }
+            hideUserButton={hasCurrentProject}
           />
           <ProjectSidebar
             isOpen={isSidebarOpen}

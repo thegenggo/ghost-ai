@@ -19,6 +19,7 @@ interface EditorNavbarProps {
   onOpenStarterTemplates?: () => void;
   isAiOpen?: boolean;
   onToggleAi?: () => void;
+  hideUserButton?: boolean;
 }
 
 export function EditorNavbar({
@@ -29,6 +30,7 @@ export function EditorNavbar({
   onOpenStarterTemplates,
   isAiOpen = false,
   onToggleAi,
+  hideUserButton = false,
 }: EditorNavbarProps) {
   const ToggleIcon = isSidebarOpen ? PanelLeftClose : PanelLeftOpen;
 
@@ -85,7 +87,7 @@ export function EditorNavbar({
             <Sparkles className="h-4 w-4 text-ai-text" />
           </Button>
         ) : null}
-        <UserButton />
+        {hideUserButton ? null : <UserButton />}
       </div>
     </header>
   );
