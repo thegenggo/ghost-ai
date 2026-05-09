@@ -1,3 +1,5 @@
+import type { AiStatusEvent } from "@/lib/ai-agent";
+
 declare global {
   interface Liveblocks {
     Presence: {
@@ -13,6 +15,8 @@ declare global {
         color: string;
       };
     };
+
+    RoomEvent: AiStatusEvent;
   }
 }
 

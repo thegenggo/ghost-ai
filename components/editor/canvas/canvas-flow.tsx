@@ -25,6 +25,7 @@ import {
 import { useCallback, useEffect, useRef } from "react";
 import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
 
+import { AiStatusToast } from "@/components/editor/canvas/ai-status-toast";
 import { CanvasControlBar } from "@/components/editor/canvas/canvas-control-bar";
 import { CanvasEdge as CanvasEdgeRenderer } from "@/components/editor/canvas/canvas-edge";
 import { CanvasNode } from "@/components/editor/canvas/canvas-node";
@@ -309,6 +310,9 @@ function CanvasFlowInner({ projectId, savedCanvas }: CanvasFlowProps) {
         </Panel>
         <Panel position="top-right">
           <PresenceAvatars />
+        </Panel>
+        <Panel position="top-center">
+          <AiStatusToast />
         </Panel>
       </ReactFlow>
       <LiveCursors />

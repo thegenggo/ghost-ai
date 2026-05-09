@@ -3,17 +3,23 @@
 import {
   type FormEvent,
   type KeyboardEvent,
+  useCallback,
+  useEffect,
   useId,
   useState,
 } from "react";
 import {
+  AlertCircle,
   Bot,
+  CheckCircle2,
   Download,
   FileText,
+  Loader2,
   Send,
   Sparkles,
   X,
 } from "lucide-react";
+import { useRealtimeRun } from "@trigger.dev/react-hooks";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,16 +30,24 @@ import {
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import type { designAgentTask } from "@/trigger/design-agent";
 
 interface AiSidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  projectId?: string;
 }
 
 interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "status";
   content: string;
+  status?: "pending" | "complete" | "error";
+}
+
+interface ActiveRun {
+  runId: string;
+  accessToken: string;
 }
 
 const STARTER_PROMPTS: readonly string[] = [
@@ -48,7 +62,7 @@ const TAB_TRIGGER_CLASSES =
 const ACCENT_BUTTON_CLASSES =
   "bg-brand text-white hover:bg-brand/90 dark:hover:bg-brand/90";
 
-export function AiSidebar({ isOpen, onClose }: AiSidebarProps) {
+export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
   return (
     <aside
       aria-label="AI workspace"
@@ -80,7 +94,7 @@ export function AiSidebar({ isOpen, onClose }: AiSidebarProps) {
           value="architect"
           className="flex min-h-0 flex-1 flex-col"
         >
-          <ArchitectTab />
+          <ArchitectTab projectId={projectId} />
         </TabsContent>
         <TabsContent
           value="specs"
@@ -128,40 +142,137 @@ function SidebarHeader({ onClose }: SidebarHeaderProps) {
   );
 }
 
-function ArchitectTab() {
+interface ArchitectTabProps {
+  projectId?: string;
+}
+
+function ArchitectTab({ projectId }: ArchitectTabProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [activeRun, setActiveRun] = useState<ActiveRun | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputId = useId();
 
-  const submit = () => {
+  const updateAssistantMessage = useCallback(
+    (
+      runId: string,
+      patch: { content?: string; status?: ChatMessage["status"] },
+    ) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === runId
+            ? {
+                ...msg,
+                content: patch.content ?? msg.content,
+                status: patch.status ?? msg.status,
+              }
+            : msg,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleRunComplete = useCallback(
+    (
+      runId: string,
+      summary: string | undefined,
+      level: "complete" | "error",
+    ) => {
+      const fallback =
+        level === "complete" ? "Design ready" : "Design failed";
+      updateAssistantMessage(runId, {
+        content: summary ?? fallback,
+        status: level,
+      });
+      setActiveRun((current) =>
+        current?.runId === runId ? null : current,
+      );
+    },
+    [updateAssistantMessage],
+  );
+
+  const submit = useCallback(async () => {
     const trimmed = draft.trim();
-    if (!trimmed) return;
+    if (!trimmed || !projectId || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setError(null);
+
+    const userMessageId = `user-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
-      {
-        id: `${Date.now()}-${prev.length}`,
-        role: "user",
-        content: trimmed,
-      },
+      { id: userMessageId, role: "user", content: trimmed },
     ]);
     setDraft("");
-  };
+
+    try {
+      const triggerResponse = await fetch("/api/ai/design", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          prompt: trimmed,
+          projectId,
+          roomId: projectId,
+        }),
+      });
+      if (!triggerResponse.ok) {
+        throw new Error(
+          `Failed to start design agent (${triggerResponse.status})`,
+        );
+      }
+      const { runId } = (await triggerResponse.json()) as { runId: string };
+
+      const tokenResponse = await fetch("/api/ai/design/token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runId }),
+      });
+      if (!tokenResponse.ok) {
+        throw new Error(
+          `Failed to authorize design agent (${tokenResponse.status})`,
+        );
+      }
+      const { token } = (await tokenResponse.json()) as { token: string };
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: runId,
+          role: "assistant",
+          content: "Reading your prompt...",
+          status: "pending",
+        },
+      ]);
+      setActiveRun({ runId, accessToken: token });
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Something went wrong";
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [draft, isSubmitting, projectId]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    submit();
+    void submit();
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      submit();
+      void submit();
     }
   };
 
   const handlePromptSelect = (prompt: string) => {
     setDraft(prompt);
   };
+
+  const isReady = Boolean(projectId);
+  const isBusy = isSubmitting || Boolean(activeRun);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -175,24 +286,29 @@ function ArchitectTab() {
                 key={message.id}
                 className={cn(
                   "flex",
-                  message.role === "user" ? "justify-end" : "justify-start"
+                  message.role === "user" ? "justify-end" : "justify-start",
                 )}
               >
-                <div
-                  className={cn(
-                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere",
-                    message.role === "user"
-                      ? "border-2 border-brand/50 bg-brand-dim text-copy-primary"
-                      : "border border-surface-border bg-elevated text-ai-text"
-                  )}
-                >
-                  {message.content}
-                </div>
+                <ChatBubble message={message} />
               </li>
             ))}
           </ul>
         )}
+        {error ? (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-error">
+            <AlertCircle className="h-3.5 w-3.5" />
+            {error}
+          </p>
+        ) : null}
       </div>
+      {activeRun ? (
+        <RunSubscriber
+          runId={activeRun.runId}
+          accessToken={activeRun.accessToken}
+          onStatus={updateAssistantMessage}
+          onComplete={handleRunComplete}
+        />
+      ) : null}
       <form
         onSubmit={handleSubmit}
         className="shrink-0 border-t border-surface-border px-4 py-3"
@@ -206,26 +322,143 @@ function ArchitectTab() {
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Describe a system to design..."
+            placeholder={
+              isReady
+                ? "Describe a system to design..."
+                : "Open a project to start designing"
+            }
             rows={1}
+            disabled={!isReady || isBusy}
             className="min-h-[72px] max-h-[160px] resize-none text-copy-primary"
           />
           <Button
             type="submit"
             size="icon"
             aria-label="Send message"
-            disabled={draft.trim().length === 0}
+            disabled={!isReady || isBusy || draft.trim().length === 0}
             className={ACCENT_BUTTON_CLASSES}
           >
-            <Send className="h-4 w-4" />
+            {isBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </Button>
         </div>
         <p className="mt-2 text-[11px] text-copy-faint">
-          Press Enter to send, Shift + Enter for a new line.
+          {isReady
+            ? "Press Enter to send, Shift + Enter for a new line."
+            : "Select or open a project to chat with Ghost AI."}
         </p>
       </form>
     </div>
   );
+}
+
+interface ChatBubbleProps {
+  message: ChatMessage;
+}
+
+function ChatBubble({ message }: ChatBubbleProps) {
+  if (message.role === "user") {
+    return (
+      <div className="max-w-[85%] rounded-2xl border-2 border-brand/50 bg-brand-dim px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere text-copy-primary">
+        {message.content}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex max-w-[85%] items-start gap-2">
+      <div
+        className={cn(
+          "rounded-2xl border bg-elevated px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere text-ai-text",
+          message.status === "error"
+            ? "border-error/40"
+            : message.status === "complete"
+            ? "border-success/40"
+            : "border-surface-border",
+        )}
+      >
+        <span className="flex items-center gap-1.5">
+          <AssistantIcon status={message.status} />
+          <span>{message.content}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function AssistantIcon({ status }: { status?: ChatMessage["status"] }) {
+  if (status === "complete") {
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />;
+  }
+  if (status === "error") {
+    return <AlertCircle className="h-3.5 w-3.5 shrink-0 text-error" />;
+  }
+  if (status === "pending") {
+    return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ai-text" />;
+  }
+  return <Bot className="h-3.5 w-3.5 shrink-0 text-ai-text" />;
+}
+
+interface RunSubscriberProps {
+  runId: string;
+  accessToken: string;
+  onStatus: (
+    runId: string,
+    patch: { content?: string; status?: ChatMessage["status"] },
+  ) => void;
+  onComplete: (
+    runId: string,
+    summary: string | undefined,
+    level: "complete" | "error",
+  ) => void;
+}
+
+function RunSubscriber({
+  runId,
+  accessToken,
+  onStatus,
+  onComplete,
+}: RunSubscriberProps) {
+  const { run, error } = useRealtimeRun<typeof designAgentTask>(runId, {
+    accessToken,
+    onComplete: (completedRun, err) => {
+      const summary =
+        readMetadataString(completedRun?.metadata, "planSummary") ??
+        readMetadataString(completedRun?.metadata, "message");
+      const failed = Boolean(err) || completedRun?.status === "FAILED";
+      onComplete(runId, summary, failed ? "error" : "complete");
+    },
+  });
+
+  const statusMessage = run?.metadata
+    ? readMetadataString(run.metadata, "message")
+    : undefined;
+
+  useEffect(() => {
+    if (statusMessage) {
+      onStatus(runId, { content: statusMessage, status: "pending" });
+    }
+  }, [statusMessage, onStatus, runId]);
+
+  useEffect(() => {
+    if (error) {
+      onComplete(runId, error.message, "error");
+    }
+  }, [error, onComplete, runId]);
+
+  return null;
+}
+
+function readMetadataString(
+  metadata: unknown,
+  key: string,
+): string | undefined {
+  if (!metadata || typeof metadata !== "object") return undefined;
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 interface ArchitectEmptyStateProps {

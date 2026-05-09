@@ -126,7 +126,11 @@ export function EditorShell({
             />
             <main className="flex flex-1 flex-col">{children}</main>
             {hasCurrentProject ? (
-              <AiSidebar isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
+              <AiSidebar
+                isOpen={isAiOpen}
+                onClose={() => setIsAiOpen(false)}
+                projectId={currentProject?.id}
+              />
             ) : null}
           </div>
         </CanvasSaveProvider>
