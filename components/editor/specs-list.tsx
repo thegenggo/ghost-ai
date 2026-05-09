@@ -227,8 +227,14 @@ function SpecPreviewDialog({
             Generated {formatTimestamp(spec.createdAt)}
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="h-full w-full min-w-0 rounded-2xl border border-surface-border bg-base/40 [&>[data-slot=scroll-area-viewport]]:max-h-full">
-          <div className="min-w-0 px-5 py-4">
+        <ScrollArea
+          className={cn(
+            "h-full w-full min-w-0 rounded-2xl border border-surface-border bg-base/40",
+            "[&>[data-slot=scroll-area-viewport]]:max-h-full",
+            "[&>[data-slot=scroll-area-scrollbar]]:top-3! [&>[data-slot=scroll-area-scrollbar]]:bottom-3! [&>[data-slot=scroll-area-scrollbar]]:right-1.5! [&>[data-slot=scroll-area-scrollbar]]:h-auto!",
+          )}
+        >
+          <div className="min-w-0 px-5 py-4 pr-6">
             {error ? (
               <p
                 role="alert"
