@@ -3,31 +3,18 @@
 import { useState } from "react";
 import {
   ClientSideSuspense,
-  LiveblocksProvider,
-  RoomProvider,
   useErrorListener,
 } from "@liveblocks/react/suspense";
 
 import { CanvasFlow } from "@/components/editor/canvas/canvas-flow";
+import type { SavedCanvas } from "@/lib/canvas-storage";
 
 interface CanvasProps {
   roomId: string;
+  savedCanvas: SavedCanvas | null;
 }
 
-export function Canvas({ roomId }: CanvasProps) {
-  return (
-    <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
-      <RoomProvider
-        id={roomId}
-        initialPresence={{ cursor: null, isThinking: false }}
-      >
-        <CanvasFrame />
-      </RoomProvider>
-    </LiveblocksProvider>
-  );
-}
-
-function CanvasFrame() {
+export function Canvas({ roomId, savedCanvas }: CanvasProps) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useErrorListener((error) => {
@@ -44,7 +31,7 @@ function CanvasFrame() {
     <ClientSideSuspense
       fallback={<CanvasMessage tone="muted" text="Connecting to canvas…" />}
     >
-      <CanvasFlow />
+      <CanvasFlow projectId={roomId} savedCanvas={savedCanvas} />
     </ClientSideSuspense>
   );
 }

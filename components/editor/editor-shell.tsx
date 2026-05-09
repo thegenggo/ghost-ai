@@ -1,8 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AiSidebar } from "@/components/editor/ai-sidebar";
+import { CanvasSaveProvider } from "@/components/editor/canvas-save-context";
+import {
+  CanvasSnapshotProvider,
+  type CanvasSnapshot,
+  type CanvasSnapshotGetter,
+} from "@/components/editor/canvas-snapshot-context";
 import { CanvasTemplatesProvider } from "@/components/editor/canvas-templates-context";
 import { CreateProjectDialog } from "@/components/editor/dialogs/create-project-dialog";
 import { DeleteProjectDialog } from "@/components/editor/dialogs/delete-project-dialog";
@@ -11,6 +17,7 @@ import { ShareDialog } from "@/components/editor/dialogs/share-dialog";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { ProjectDialogsProvider } from "@/components/editor/project-dialogs-context";
 import { ProjectSidebar } from "@/components/editor/project-sidebar";
+import type { CanvasSaveStatus } from "@/hooks/use-canvas-autosave";
 import { useProjectActions } from "@/hooks/use-project-actions";
 import type { ProjectListItem, ProjectOwnership } from "@/lib/projects";
 
@@ -37,6 +44,9 @@ export function EditorShell({
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isStarterTemplatesOpen, setIsStarterTemplatesOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<CanvasSaveStatus>("idle");
+  const saveNowRef = useRef<(() => void) | null>(null);
+  const snapshotGetterRef = useRef<CanvasSnapshotGetter | null>(null);
   const actions = useProjectActions();
 
   const contextValue = useMemo(
@@ -61,46 +71,96 @@ export function EditorShell({
     [isStarterTemplatesOpen, closeStarterTemplates]
   );
 
+  const reportSaveStatus = useCallback((status: CanvasSaveStatus) => {
+    setSaveStatus(status);
+  }, []);
+
+  const registerSaveNow = useCallback((saveNow: (() => void) | null) => {
+    saveNowRef.current = saveNow;
+  }, []);
+
+  const saveContextValue = useMemo(
+    () => ({
+      reportStatus: reportSaveStatus,
+      registerSaveNow,
+    }),
+    [reportSaveStatus, registerSaveNow]
+  );
+
+  const registerGetSnapshot = useCallback(
+    (getter: CanvasSnapshotGetter | null) => {
+      snapshotGetterRef.current = getter;
+    },
+    []
+  );
+
+  const getSnapshot = useCallback((): CanvasSnapshot | null => {
+    return snapshotGetterRef.current?.() ?? null;
+  }, []);
+
+  const snapshotContextValue = useMemo(
+    () => ({
+      registerGetSnapshot,
+      getSnapshot,
+    }),
+    [registerGetSnapshot, getSnapshot]
+  );
+
+  const handleSaveNow = useCallback(() => {
+    saveNowRef.current?.();
+  }, []);
+
   const hasCurrentProject = Boolean(currentProject);
 
   return (
     <ProjectDialogsProvider value={contextValue}>
       <CanvasTemplatesProvider value={templatesContextValue}>
-        <div className="flex h-screen flex-col bg-base">
-          <EditorNavbar
-            isSidebarOpen={isSidebarOpen}
-            onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
-            currentProjectName={currentProject?.name}
-            onOpenShare={
-              hasCurrentProject ? () => setIsShareOpen(true) : undefined
-            }
-            onOpenStarterTemplates={
-              hasCurrentProject
-                ? () => setIsStarterTemplatesOpen(true)
-                : undefined
-            }
-            isAiOpen={isAiOpen}
-            onToggleAi={
-              hasCurrentProject
-                ? () => setIsAiOpen((open) => !open)
-                : undefined
-            }
-          />
-          <ProjectSidebar
-            isOpen={isSidebarOpen}
-            ownedProjects={ownedProjects}
-            sharedProjects={sharedProjects}
-            currentProjectId={currentProject?.id}
-            onClose={() => setIsSidebarOpen(false)}
-            onCreateProject={actions.openCreate}
-            onRenameProject={actions.openRename}
-            onDeleteProject={actions.openDelete}
-          />
-          <main className="flex flex-1 flex-col">{children}</main>
-          {hasCurrentProject ? (
-            <AiSidebar isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
-          ) : null}
-        </div>
+        <CanvasSnapshotProvider value={snapshotContextValue}>
+        <CanvasSaveProvider value={saveContextValue}>
+          <div className="flex h-screen flex-col bg-base">
+            <EditorNavbar
+              isSidebarOpen={isSidebarOpen}
+              onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+              currentProjectName={currentProject?.name}
+              onOpenShare={
+                hasCurrentProject ? () => setIsShareOpen(true) : undefined
+              }
+              onOpenStarterTemplates={
+                hasCurrentProject
+                  ? () => setIsStarterTemplatesOpen(true)
+                  : undefined
+              }
+              isAiOpen={isAiOpen}
+              onToggleAi={
+                hasCurrentProject
+                  ? () => setIsAiOpen((open) => !open)
+                  : undefined
+              }
+              hideUserButton={hasCurrentProject}
+              saveStatus={hasCurrentProject ? saveStatus : undefined}
+              onSaveNow={hasCurrentProject ? handleSaveNow : undefined}
+            />
+            <ProjectSidebar
+              isOpen={isSidebarOpen}
+              ownedProjects={ownedProjects}
+              sharedProjects={sharedProjects}
+              currentProjectId={currentProject?.id}
+              onClose={() => setIsSidebarOpen(false)}
+              onCreateProject={actions.openCreate}
+              onRenameProject={actions.openRename}
+              onDeleteProject={actions.openDelete}
+            />
+            <main className="flex flex-1 flex-col">{children}</main>
+            {hasCurrentProject ? (
+              <AiSidebar
+                isOpen={isAiOpen}
+                onClose={() => setIsAiOpen(false)}
+                projectId={currentProject?.id}
+              />
+            ) : null}
+          </div>
+        </CanvasSaveProvider>
+        </CanvasSnapshotProvider>
       </CanvasTemplatesProvider>
 
       {actions.dialog === "create" ? (

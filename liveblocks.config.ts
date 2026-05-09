@@ -1,8 +1,11 @@
+import type { AiStatusEvent } from "@/lib/ai-agent";
+import type { AiChatEvent } from "@/types/tasks";
+
 declare global {
   interface Liveblocks {
     Presence: {
       cursor: { x: number; y: number } | null;
-      isThinking: boolean;
+      thinking: boolean;
     };
 
     UserMeta: {
@@ -13,6 +16,8 @@ declare global {
         color: string;
       };
     };
+
+    RoomEvent: AiStatusEvent | AiChatEvent;
   }
 }
 

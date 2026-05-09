@@ -20,22 +20,30 @@ import {
   useCanUndo,
   useRedo,
   useUndo,
+  useUpdateMyPresence,
 } from "@liveblocks/react/suspense";
-import { useCallback, useRef } from "react";
-import type { DragEvent } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import type { DragEvent, MouseEvent as ReactMouseEvent } from "react";
 
+import { AiStatusToast } from "@/components/editor/canvas/ai-status-toast";
 import { CanvasControlBar } from "@/components/editor/canvas/canvas-control-bar";
 import { CanvasEdge as CanvasEdgeRenderer } from "@/components/editor/canvas/canvas-edge";
 import { CanvasNode } from "@/components/editor/canvas/canvas-node";
+import { LiveCursors } from "@/components/editor/canvas/live-cursors";
+import { PresenceAvatars } from "@/components/editor/canvas/presence-avatars";
 import {
   ShapePanel,
   SHAPE_DRAG_MIME,
   type ShapeDragPayload,
 } from "@/components/editor/canvas/shape-panel";
+import { useCanvasSaveContext } from "@/components/editor/canvas-save-context";
+import { useCanvasSnapshotContext } from "@/components/editor/canvas-snapshot-context";
 import { useCanvasTemplatesContext } from "@/components/editor/canvas-templates-context";
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
 import type { CanvasTemplate } from "@/components/editor/starter-templates";
+import { useCanvasAutosave } from "@/hooks/use-canvas-autosave";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import type { SavedCanvas } from "@/lib/canvas-storage";
 import {
   CANVAS_EDGE_TYPE,
   CANVAS_NODE_TYPE,
@@ -66,20 +74,25 @@ const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
   },
 };
 
-export function CanvasFlow() {
+interface CanvasFlowProps {
+  projectId: string;
+  savedCanvas: SavedCanvas | null;
+}
+
+export function CanvasFlow({ projectId, savedCanvas }: CanvasFlowProps) {
   return (
     <ReactFlowProvider>
-      <CanvasFlowInner />
+      <CanvasFlowInner projectId={projectId} savedCanvas={savedCanvas} />
     </ReactFlowProvider>
   );
 }
 
-function CanvasFlowInner() {
+function CanvasFlowInner({ projectId, savedCanvas }: CanvasFlowProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } =
     useLiveblocksFlow<CanvasNodeData, CanvasEdge>({
       suspense: true,
-      nodes: { initial: [] },
-      edges: { initial: [] },
+      nodes: { initial: savedCanvas?.nodes ?? [] },
+      edges: { initial: savedCanvas?.edges ?? [] },
     });
   const reactFlow = useReactFlow<CanvasNodeData, CanvasEdge>();
   const { screenToFlowPosition } = reactFlow;
@@ -90,6 +103,48 @@ function CanvasFlowInner() {
   const redo = useRedo();
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
+  const updateMyPresence = useUpdateMyPresence();
+  const saveContext = useCanvasSaveContext();
+  const snapshotContext = useCanvasSnapshotContext();
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
+  useEffect(() => {
+    if (!snapshotContext) return;
+    snapshotContext.registerGetSnapshot(() => ({
+      nodes: nodesRef.current,
+      edges: edgesRef.current,
+    }));
+    return () => {
+      snapshotContext.registerGetSnapshot(null);
+    };
+  }, [snapshotContext]);
+
+  const { status: saveStatus, saveNow } = useCanvasAutosave({
+    projectId,
+    nodes,
+    edges,
+    enabled: true,
+  });
+
+  useEffect(() => {
+    saveContext?.reportStatus(saveStatus);
+  }, [saveContext, saveStatus]);
+
+  useEffect(() => {
+    saveContext?.registerSaveNow(saveNow);
+    return () => {
+      saveContext?.registerSaveNow(null);
+    };
+  }, [saveContext, saveNow]);
 
   const handleZoomIn = useCallback(() => {
     void reactFlow.zoomIn({ duration: 200 });
@@ -110,6 +165,21 @@ function CanvasFlowInner() {
     canUndo,
     canRedo,
   });
+
+  const handleMouseMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const point = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      updateMyPresence({ cursor: { x: point.x, y: point.y } });
+    },
+    [screenToFlowPosition, updateMyPresence],
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    updateMyPresence({ cursor: null });
+  }, [updateMyPresence]);
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes(SHAPE_DRAG_MIME)) {
@@ -208,7 +278,7 @@ function CanvasFlowInner() {
 
   return (
     <div
-      className="flex flex-1 bg-base"
+      className="relative flex flex-1 bg-base"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -222,6 +292,8 @@ function CanvasFlowInner() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onDelete={onDelete}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         connectionMode={ConnectionMode.Loose}
         fitView
         proOptions={{ hideAttribution: true }}
@@ -259,7 +331,14 @@ function CanvasFlowInner() {
         <Panel position="bottom-center">
           <ShapePanel />
         </Panel>
+        <Panel position="top-right">
+          <PresenceAvatars />
+        </Panel>
+        <Panel position="top-center">
+          <AiStatusToast />
+        </Panel>
       </ReactFlow>
+      <LiveCursors />
       {templatesContext?.isOpen ? (
         <StarterTemplatesModal
           onImport={handleImportTemplate}
