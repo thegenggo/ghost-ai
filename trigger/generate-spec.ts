@@ -1,7 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { logger, metadata, schemaTask } from "@trigger.dev/sdk";
+import { put } from "@vercel/blob";
 import { generateText } from "ai";
 import { z } from "zod";
+
+import { prisma } from "@/lib/prisma";
 
 const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
@@ -109,12 +114,42 @@ export const generateSpecTask = schemaTask({
         chatTurns: chatHistory.length,
       });
 
+      metadata.set("message", "Saving spec");
+      metadata.set("progress", 75);
+
+      const specId = randomUUID();
+      const blob = await put(
+        `specs/${projectId}/${specId}.md`,
+        markdown,
+        {
+          access: "private",
+          contentType: "text/markdown; charset=utf-8",
+          allowOverwrite: true,
+        },
+      );
+
+      const spec = await prisma.projectSpec.create({
+        data: {
+          id: specId,
+          projectId,
+          filePath: blob.url,
+        },
+        select: { id: true, filePath: true, createdAt: true },
+      });
+
       metadata.set("status", "complete");
       metadata.set("message", "Spec ready");
       metadata.set("progress", 100);
       metadata.set("characters", markdown.length);
+      metadata.set("specId", spec.id);
+      metadata.set("filePath", spec.filePath);
 
-      return { spec: markdown };
+      return {
+        spec: markdown,
+        specId: spec.id,
+        filePath: spec.filePath,
+        createdAt: spec.createdAt.toISOString(),
+      };
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown error";
