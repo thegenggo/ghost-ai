@@ -4,6 +4,11 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AiSidebar } from "@/components/editor/ai-sidebar";
 import { CanvasSaveProvider } from "@/components/editor/canvas-save-context";
+import {
+  CanvasSnapshotProvider,
+  type CanvasSnapshot,
+  type CanvasSnapshotGetter,
+} from "@/components/editor/canvas-snapshot-context";
 import { CanvasTemplatesProvider } from "@/components/editor/canvas-templates-context";
 import { CreateProjectDialog } from "@/components/editor/dialogs/create-project-dialog";
 import { DeleteProjectDialog } from "@/components/editor/dialogs/delete-project-dialog";
@@ -41,6 +46,7 @@ export function EditorShell({
   const [isStarterTemplatesOpen, setIsStarterTemplatesOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<CanvasSaveStatus>("idle");
   const saveNowRef = useRef<(() => void) | null>(null);
+  const snapshotGetterRef = useRef<CanvasSnapshotGetter | null>(null);
   const actions = useProjectActions();
 
   const contextValue = useMemo(
@@ -81,6 +87,25 @@ export function EditorShell({
     [reportSaveStatus, registerSaveNow]
   );
 
+  const registerGetSnapshot = useCallback(
+    (getter: CanvasSnapshotGetter | null) => {
+      snapshotGetterRef.current = getter;
+    },
+    []
+  );
+
+  const getSnapshot = useCallback((): CanvasSnapshot | null => {
+    return snapshotGetterRef.current?.() ?? null;
+  }, []);
+
+  const snapshotContextValue = useMemo(
+    () => ({
+      registerGetSnapshot,
+      getSnapshot,
+    }),
+    [registerGetSnapshot, getSnapshot]
+  );
+
   const handleSaveNow = useCallback(() => {
     saveNowRef.current?.();
   }, []);
@@ -90,6 +115,7 @@ export function EditorShell({
   return (
     <ProjectDialogsProvider value={contextValue}>
       <CanvasTemplatesProvider value={templatesContextValue}>
+        <CanvasSnapshotProvider value={snapshotContextValue}>
         <CanvasSaveProvider value={saveContextValue}>
           <div className="flex h-screen flex-col bg-base">
             <EditorNavbar
@@ -134,6 +160,7 @@ export function EditorShell({
             ) : null}
           </div>
         </CanvasSaveProvider>
+        </CanvasSnapshotProvider>
       </CanvasTemplatesProvider>
 
       {actions.dialog === "create" ? (

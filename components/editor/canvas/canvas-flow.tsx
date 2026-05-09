@@ -37,6 +37,7 @@ import {
   type ShapeDragPayload,
 } from "@/components/editor/canvas/shape-panel";
 import { useCanvasSaveContext } from "@/components/editor/canvas-save-context";
+import { useCanvasSnapshotContext } from "@/components/editor/canvas-snapshot-context";
 import { useCanvasTemplatesContext } from "@/components/editor/canvas-templates-context";
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal";
 import type { CanvasTemplate } from "@/components/editor/starter-templates";
@@ -104,6 +105,28 @@ function CanvasFlowInner({ projectId, savedCanvas }: CanvasFlowProps) {
   const canRedo = useCanRedo();
   const updateMyPresence = useUpdateMyPresence();
   const saveContext = useCanvasSaveContext();
+  const snapshotContext = useCanvasSnapshotContext();
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
+  useEffect(() => {
+    if (!snapshotContext) return;
+    snapshotContext.registerGetSnapshot(() => ({
+      nodes: nodesRef.current,
+      edges: edgesRef.current,
+    }));
+    return () => {
+      snapshotContext.registerGetSnapshot(null);
+    };
+  }, [snapshotContext]);
 
   const { status: saveStatus, saveNow } = useCanvasAutosave({
     projectId,

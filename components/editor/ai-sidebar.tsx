@@ -13,8 +13,6 @@ import {
   AlertCircle,
   Bot,
   CheckCircle2,
-  Download,
-  FileText,
   Loader2,
   MessageSquare,
   Send,
@@ -36,6 +34,8 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { SpecsList } from "@/components/editor/specs-list";
+import { useCanvasSnapshotContext } from "@/components/editor/canvas-snapshot-context";
 import {
   AI_AGENT_NAME,
   AI_AGENT_USER_ID,
@@ -44,6 +44,7 @@ import {
 } from "@/lib/ai-agent";
 import { cn } from "@/lib/utils";
 import type { designAgentTask } from "@/trigger/design-agent";
+import type { generateSpecTask } from "@/trigger/generate-spec";
 import {
   AI_CHAT_EVENT_TYPE,
   parseAiChatMessage,
@@ -231,7 +232,11 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
           value="specs"
           className="flex min-h-0 flex-1 flex-col"
         >
-          <SpecsTab isAiActive={isAiActive} />
+          <SpecsTab
+            isAiActive={isAiActive}
+            projectId={projectId}
+            chatMessages={chatMessages}
+          />
         </TabsContent>
       </Tabs>
     </aside>
@@ -594,6 +599,40 @@ function readMetadataString(
   return typeof value === "string" ? value : undefined;
 }
 
+interface SpecRunSubscriberProps {
+  runId: string;
+  accessToken: string;
+  onComplete: (level: "complete" | "error", message?: string) => void;
+}
+
+function SpecRunSubscriber({
+  runId,
+  accessToken,
+  onComplete,
+}: SpecRunSubscriberProps) {
+  const completedRef = useRef(false);
+  const { error } = useRealtimeRun<typeof generateSpecTask>(runId, {
+    accessToken,
+    onComplete: (completedRun, err) => {
+      if (completedRef.current) return;
+      completedRef.current = true;
+      const failed = Boolean(err) || completedRun?.status === "FAILED";
+      const message =
+        readMetadataString(completedRun?.metadata, "message") ??
+        (err instanceof Error ? err.message : undefined);
+      onComplete(failed ? "error" : "complete", message);
+    },
+  });
+
+  useEffect(() => {
+    if (!error || completedRef.current) return;
+    completedRef.current = true;
+    onComplete("error", error.message);
+  }, [error, onComplete]);
+
+  return null;
+}
+
 interface ArchitectEmptyStateProps {
   onSelectPrompt: (prompt: string) => void;
 }
@@ -635,28 +674,149 @@ function ArchitectEmptyState({ onSelectPrompt }: ArchitectEmptyStateProps) {
 
 interface SpecsTabProps {
   isAiActive: boolean;
+  projectId?: string;
+  chatMessages: AiChatMessage[];
 }
 
-function SpecsTab({ isAiActive }: SpecsTabProps) {
+interface SpecRunState {
+  runId: string;
+  token: string;
+}
+
+function SpecsTab({ isAiActive, projectId, chatMessages }: SpecsTabProps) {
+  const snapshotContext = useCanvasSnapshotContext();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeRun, setActiveRun] = useState<SpecRunState | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [refetchKey, setRefetchKey] = useState(0);
+
+  const isGenerating = isSubmitting || Boolean(activeRun);
+  const canGenerate = Boolean(projectId) && !isGenerating && !isAiActive;
+
+  const handleRunComplete = useCallback(
+    (level: "complete" | "error", message?: string) => {
+      setActiveRun(null);
+      if (level === "complete") {
+        setGenerationError(null);
+        setRefetchKey((value) => value + 1);
+      } else {
+        setGenerationError(message ?? "Spec generation failed");
+      }
+    },
+    [],
+  );
+
+  const handleGenerate = useCallback(async () => {
+    if (!projectId || !snapshotContext) return;
+    if (isGenerating || isAiActive) return;
+
+    const snapshot = snapshotContext.getSnapshot();
+    if (!snapshot) {
+      setGenerationError("Canvas is not ready yet.");
+      return;
+    }
+
+    const chatHistory = chatMessages.map((message) => ({
+      role: message.role,
+      sender: message.sender,
+      content: message.content,
+    }));
+
+    setGenerationError(null);
+    setIsSubmitting(true);
+
+    try {
+      const triggerResponse = await fetch("/api/ai/spec", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          roomId: projectId,
+          chatHistory,
+          nodes: snapshot.nodes,
+          edges: snapshot.edges,
+        }),
+      });
+      if (!triggerResponse.ok) {
+        throw new Error(
+          `Failed to start spec generation (${triggerResponse.status})`,
+        );
+      }
+      const { runId } = (await triggerResponse.json()) as { runId: string };
+
+      const tokenResponse = await fetch("/api/ai/spec/token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runId }),
+      });
+      if (!tokenResponse.ok) {
+        throw new Error(
+          `Failed to authorize spec run (${tokenResponse.status})`,
+        );
+      }
+      const { token } = (await tokenResponse.json()) as { token: string };
+
+      setActiveRun({ runId, token });
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Spec generation failed";
+      setGenerationError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [
+    chatMessages,
+    isAiActive,
+    isGenerating,
+    projectId,
+    snapshotContext,
+  ]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-surface-border px-4 py-3">
         <Button
           type="button"
           size="default"
-          disabled={isAiActive}
+          onClick={() => void handleGenerate()}
+          disabled={!canGenerate}
           className={cn(ACCENT_BUTTON_CLASSES, "w-full")}
         >
-          {isAiActive ? (
+          {isGenerating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          Generate Spec
+          {isSubmitting
+            ? "Starting..."
+            : activeRun
+              ? "Generating..."
+              : "Generate Spec"}
         </Button>
+        {generationError ? (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-error">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            {generationError}
+          </p>
+        ) : null}
       </div>
+      {activeRun ? (
+        <SpecRunSubscriber
+          runId={activeRun.runId}
+          accessToken={activeRun.token}
+          onComplete={handleRunComplete}
+        />
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <DemoSpecCard />
+        {projectId ? (
+          <SpecsList
+            key={`${projectId}-${refetchKey}`}
+            projectId={projectId}
+          />
+        ) : (
+          <p className="text-xs text-copy-muted">
+            Open a project to view specs.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -859,40 +1019,3 @@ function formatChatTime(timestamp: number): string {
   });
 }
 
-function DemoSpecCard() {
-  return (
-    <article className="flex flex-col gap-3 rounded-2xl border border-surface-border bg-elevated p-4">
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-dim text-brand"
-        >
-          <FileText className="h-5 w-5" />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h3 className="truncate text-sm font-medium text-copy-primary">
-            E-commerce Platform Spec
-          </h3>
-          <p className="text-[11px] text-copy-faint">
-            Generated 2 minutes ago
-          </p>
-        </div>
-      </div>
-      <p className="line-clamp-3 text-xs text-copy-muted">
-        Outlines the shopping cart, checkout, and inventory services along
-        with their API contracts, data models, and event flows.
-      </p>
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled
-          aria-label="Download spec"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Download
-        </Button>
-      </div>
-    </article>
-  );
-}
