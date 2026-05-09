@@ -1,4 +1,4 @@
-import { tasks } from "@trigger.dev/sdk";
+import { auth as triggerAuth, tasks } from "@trigger.dev/sdk";
 
 import { prisma } from "@/lib/prisma";
 import { checkProjectAccess, getCurrentIdentity } from "@/lib/project-access";
@@ -7,7 +7,6 @@ import type { designAgentTask } from "@/trigger/design-agent";
 interface DesignRequestBody {
   prompt: string;
   roomId: string;
-  projectId: string;
 }
 
 export async function POST(request: Request) {
@@ -21,7 +20,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const access = await checkProjectAccess(body.projectId, identity);
+  const access = await checkProjectAccess(body.roomId, identity);
   if (!access) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
@@ -39,7 +38,15 @@ export async function POST(request: Request) {
     },
   });
 
-  return Response.json({ runId: handle.id }, { status: 201 });
+  const publicToken = await triggerAuth.createPublicToken({
+    scopes: { read: { runs: [handle.id] } },
+    expirationTime: "1h",
+  });
+
+  return Response.json(
+    { runId: handle.id, publicToken },
+    { status: 201 },
+  );
 }
 
 async function readBody(request: Request): Promise<DesignRequestBody | null> {
@@ -53,10 +60,9 @@ async function readBody(request: Request): Promise<DesignRequestBody | null> {
 
   const prompt = readNonEmptyString(raw, "prompt");
   const roomId = readNonEmptyString(raw, "roomId");
-  const projectId = readNonEmptyString(raw, "projectId");
-  if (!prompt || !roomId || !projectId) return null;
+  if (!prompt || !roomId) return null;
 
-  return { prompt, roomId, projectId };
+  return { prompt, roomId };
 }
 
 function readNonEmptyString(body: object, key: string): string | null {

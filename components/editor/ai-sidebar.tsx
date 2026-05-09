@@ -37,6 +37,8 @@ import {
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AI_AGENT_NAME,
+  AI_AGENT_USER_ID,
   AI_STATUS_EVENT_TYPE,
   type AiStatusLevel,
 } from "@/lib/ai-agent";
@@ -55,16 +57,9 @@ interface AiSidebarProps {
   projectId?: string;
 }
 
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant" | "status";
-  content: string;
-  status?: "pending" | "complete" | "error";
-}
-
 interface ActiveRun {
   runId: string;
-  accessToken: string;
+  publicToken: string;
 }
 
 interface FeedState {
@@ -82,7 +77,7 @@ const TAB_TRIGGER_CLASSES =
   "flex-1 text-copy-muted hover:text-copy-primary data-active:bg-brand-dim data-active:text-brand dark:data-active:bg-brand-dim dark:data-active:text-brand dark:data-active:border-transparent";
 
 const ACCENT_BUTTON_CLASSES =
-  "bg-brand text-white hover:bg-brand/90 dark:hover:bg-brand/90";
+  "bg-accent-chat text-[var(--bg-base)] hover:bg-accent-chat/90 dark:hover:bg-accent-chat/90 disabled:opacity-50";
 
 export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
   const [feedState, setFeedState] = useState<FeedState | null>(null);
@@ -125,6 +120,27 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
   const senderName = self?.info?.name ?? null;
   const canChat = Boolean(senderId && senderName);
 
+  const appendLocalMessage = useCallback((message: AiChatMessage) => {
+    setChatMessages((prev) =>
+      prev.some((msg) => msg.id === message.id) ? prev : [...prev, message],
+    );
+  }, []);
+
+  const broadcastChatMessage = useCallback(
+    (message: AiChatMessage): boolean => {
+      const validated = parseAiChatMessage(message);
+      if (!validated) return false;
+      try {
+        broadcast({ type: AI_CHAT_EVENT_TYPE, message: validated });
+      } catch {
+        return false;
+      }
+      appendLocalMessage(validated);
+      return true;
+    },
+    [appendLocalMessage, broadcast],
+  );
+
   const sendChatMessage = useCallback(
     (rawContent: string) => {
       const trimmed = rawContent.trim();
@@ -143,28 +159,15 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
         content: trimmed,
         timestamp: Date.now(),
       };
-      const validated = parseAiChatMessage(message);
-      if (!validated) {
+      const success = broadcastChatMessage(message);
+      if (!success) {
         setChatError("Message could not be sent");
         return false;
       }
-      try {
-        broadcast({ type: AI_CHAT_EVENT_TYPE, message: validated });
-      } catch (caught) {
-        const text =
-          caught instanceof Error ? caught.message : "Failed to send message";
-        setChatError(text);
-        return false;
-      }
-      setChatMessages((prev) =>
-        prev.some((msg) => msg.id === validated.id)
-          ? prev
-          : [...prev, validated],
-      );
       setChatError(null);
       return true;
     },
-    [broadcast, senderId, senderName],
+    [broadcastChatMessage, senderId, senderName],
   );
 
   return (
@@ -180,7 +183,6 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
       )}
     >
       <SidebarHeader onClose={onClose} />
-      {feedState ? <FeedStatusBanner state={feedState} /> : null}
       <Tabs
         defaultValue="architect"
         className="flex min-h-0 flex-1 flex-col gap-0"
@@ -202,7 +204,15 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
           value="architect"
           className="flex min-h-0 flex-1 flex-col"
         >
-          <ArchitectTab projectId={projectId} isAiActive={isAiActive} />
+          <ArchitectTab
+            projectId={projectId}
+            messages={chatMessages}
+            currentSenderId={senderId}
+            senderName={senderName}
+            isAiActive={isAiActive}
+            feedState={feedState}
+            broadcastMessage={broadcastChatMessage}
+          />
         </TabsContent>
         <TabsContent
           value="chat"
@@ -228,43 +238,20 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
   );
 }
 
-interface FeedStatusBannerProps {
-  state: FeedState;
+interface StatusStripProps {
+  level: AiStatusLevel;
+  text: string;
 }
 
-function FeedStatusBanner({ state }: FeedStatusBannerProps) {
-  const isActive = state.level === "start" || state.level === "processing";
-  const fallback =
-    state.level === "complete"
-      ? "Design ready"
-      : state.level === "error"
-      ? "AI ran into an issue"
-      : "Working...";
-  const text = state.text || fallback;
+function StatusStrip({ level, text }: StatusStripProps) {
   return (
     <div
       role="status"
       aria-live="polite"
-      className={cn(
-        "shrink-0 border-b border-surface-border px-4 py-2",
-      )}
+      className="mb-2 flex items-center gap-2 rounded-xl border border-accent-chat/40 bg-elevated px-3 py-1.5 text-xs text-accent-chat"
     >
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
-          state.level === "error"
-            ? "border-error/40 text-error"
-            : state.level === "complete"
-            ? "border-success/40 text-success"
-            : "border-ai/40 text-ai-text",
-        )}
-      >
-        <FeedStatusIcon level={state.level} />
-        <span className="truncate">{text}</span>
-        {isActive ? (
-          <span className="sr-only">Generating</span>
-        ) : null}
-      </div>
+      <FeedStatusIcon level={level} />
+      <span className="flex-1 truncate">{text}</span>
     </div>
   );
 }
@@ -319,36 +306,35 @@ function SidebarHeader({ onClose }: SidebarHeaderProps) {
 
 interface ArchitectTabProps {
   projectId?: string;
+  messages: AiChatMessage[];
+  currentSenderId: string | null;
+  senderName: string | null;
   isAiActive: boolean;
+  feedState: FeedState | null;
+  broadcastMessage: (message: AiChatMessage) => boolean;
 }
 
-function ArchitectTab({ projectId, isAiActive }: ArchitectTabProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+function ArchitectTab({
+  projectId,
+  messages,
+  currentSenderId,
+  senderName,
+  isAiActive,
+  feedState,
+  broadcastMessage,
+}: ArchitectTabProps) {
   const [draft, setDraft] = useState("");
   const [activeRun, setActiveRun] = useState<ActiveRun | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputId = useId();
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  const updateAssistantMessage = useCallback(
-    (
-      runId: string,
-      patch: { content?: string; status?: ChatMessage["status"] },
-    ) => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === runId
-            ? {
-                ...msg,
-                content: patch.content ?? msg.content,
-                status: patch.status ?? msg.status,
-              }
-            : msg,
-        ),
-      );
-    },
-    [],
-  );
+  useEffect(() => {
+    const node = listRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [messages.length]);
 
   const handleRunComplete = useCallback(
     (
@@ -358,78 +344,96 @@ function ArchitectTab({ projectId, isAiActive }: ArchitectTabProps) {
     ) => {
       const fallback =
         level === "complete" ? "Design ready" : "Design failed";
-      updateAssistantMessage(runId, {
+      const aiMessage: AiChatMessage = {
+        id: `ai-${runId}`,
+        senderId: AI_AGENT_USER_ID,
+        sender: AI_AGENT_NAME,
+        role: level === "error" ? "system" : "assistant",
         content: summary ?? fallback,
-        status: level,
-      });
+        timestamp: Date.now(),
+      };
+      broadcastMessage(aiMessage);
       setActiveRun((current) =>
         current?.runId === runId ? null : current,
       );
     },
-    [updateAssistantMessage],
+    [broadcastMessage],
   );
 
   const submit = useCallback(async () => {
     const trimmed = draft.trim();
-    if (!trimmed || !projectId || isSubmitting) return;
+    if (
+      !trimmed ||
+      !projectId ||
+      isSubmitting ||
+      activeRun ||
+      isAiActive
+    ) {
+      return;
+    }
+    if (!currentSenderId || !senderName) {
+      setError("Connecting to room...");
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
 
-    const userMessageId = `user-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: userMessageId, role: "user", content: trimmed },
-    ]);
+    const userMessage: AiChatMessage = {
+      id: `${currentSenderId}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+      senderId: currentSenderId,
+      sender: senderName,
+      role: "user",
+      content: trimmed,
+      timestamp: Date.now(),
+    };
+    broadcastMessage(userMessage);
     setDraft("");
 
     try {
-      const triggerResponse = await fetch("/api/ai/design", {
+      const response = await fetch("/api/ai/design", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          prompt: trimmed,
-          projectId,
-          roomId: projectId,
-        }),
+        body: JSON.stringify({ prompt: trimmed, roomId: projectId }),
       });
-      if (!triggerResponse.ok) {
+      if (!response.ok) {
         throw new Error(
-          `Failed to start design agent (${triggerResponse.status})`,
+          `Failed to start design agent (${response.status})`,
         );
       }
-      const { runId } = (await triggerResponse.json()) as { runId: string };
-
-      const tokenResponse = await fetch("/api/ai/design/token", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ runId }),
-      });
-      if (!tokenResponse.ok) {
-        throw new Error(
-          `Failed to authorize design agent (${tokenResponse.status})`,
-        );
-      }
-      const { token } = (await tokenResponse.json()) as { token: string };
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: runId,
-          role: "assistant",
-          content: "Reading your prompt...",
-          status: "pending",
-        },
-      ]);
-      setActiveRun({ runId, accessToken: token });
+      const data = (await response.json()) as {
+        runId: string;
+        publicToken: string;
+      };
+      setActiveRun({ runId: data.runId, publicToken: data.publicToken });
     } catch (caught) {
-      const message =
+      const messageText =
         caught instanceof Error ? caught.message : "Something went wrong";
-      setError(message);
+      const errorMessage: AiChatMessage = {
+        id: `system-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        senderId: AI_AGENT_USER_ID,
+        sender: AI_AGENT_NAME,
+        role: "system",
+        content: messageText,
+        timestamp: Date.now(),
+      };
+      broadcastMessage(errorMessage);
+      setError(messageText);
     } finally {
       setIsSubmitting(false);
     }
-  }, [draft, isSubmitting, projectId]);
+  }, [
+    activeRun,
+    broadcastMessage,
+    currentSenderId,
+    draft,
+    isAiActive,
+    isSubmitting,
+    projectId,
+    senderName,
+  ]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -449,30 +453,40 @@ function ArchitectTab({ projectId, isAiActive }: ArchitectTabProps) {
 
   const isReady = Boolean(projectId);
   const isBusy = isSubmitting || Boolean(activeRun) || isAiActive;
+  const showStatusStrip = Boolean(activeRun) || isAiActive;
+  const statusLevel: AiStatusLevel = feedState?.level ?? "processing";
+  const statusFallback =
+    statusLevel === "complete"
+      ? "Design ready"
+      : statusLevel === "error"
+        ? "AI ran into an issue"
+        : statusLevel === "start"
+          ? "Working..."
+          : "Generating...";
+  const statusText = feedState?.text || statusFallback;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+      >
         {messages.length === 0 ? (
           <ArchitectEmptyState onSelectPrompt={handlePromptSelect} />
         ) : (
           <ul className="flex flex-col gap-3">
             {messages.map((message) => (
-              <li
+              <ChatMessageItem
                 key={message.id}
-                className={cn(
-                  "flex",
-                  message.role === "user" ? "justify-end" : "justify-start",
-                )}
-              >
-                <ChatBubble message={message} />
-              </li>
+                message={message}
+                isOwn={message.senderId === currentSenderId}
+              />
             ))}
           </ul>
         )}
         {error ? (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-error">
-            <AlertCircle className="h-3.5 w-3.5" />
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
             {error}
           </p>
         ) : null}
@@ -480,8 +494,7 @@ function ArchitectTab({ projectId, isAiActive }: ArchitectTabProps) {
       {activeRun ? (
         <RunSubscriber
           runId={activeRun.runId}
-          accessToken={activeRun.accessToken}
-          onStatus={updateAssistantMessage}
+          accessToken={activeRun.publicToken}
           onComplete={handleRunComplete}
         />
       ) : null}
@@ -489,6 +502,9 @@ function ArchitectTab({ projectId, isAiActive }: ArchitectTabProps) {
         onSubmit={handleSubmit}
         className="shrink-0 border-t border-surface-border px-4 py-3"
       >
+        {showStatusStrip ? (
+          <StatusStrip level={statusLevel} text={statusText} />
+        ) : null}
         <label htmlFor={inputId} className="sr-only">
           Ask the AI architect
         </label>
@@ -531,60 +547,9 @@ function ArchitectTab({ projectId, isAiActive }: ArchitectTabProps) {
   );
 }
 
-interface ChatBubbleProps {
-  message: ChatMessage;
-}
-
-function ChatBubble({ message }: ChatBubbleProps) {
-  if (message.role === "user") {
-    return (
-      <div className="max-w-[85%] rounded-2xl border-2 border-brand/50 bg-brand-dim px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere text-copy-primary">
-        {message.content}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex max-w-[85%] items-start gap-2">
-      <div
-        className={cn(
-          "rounded-2xl border bg-elevated px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere text-ai-text",
-          message.status === "error"
-            ? "border-error/40"
-            : message.status === "complete"
-            ? "border-success/40"
-            : "border-surface-border",
-        )}
-      >
-        <span className="flex items-center gap-1.5">
-          <AssistantIcon status={message.status} />
-          <span>{message.content}</span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function AssistantIcon({ status }: { status?: ChatMessage["status"] }) {
-  if (status === "complete") {
-    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />;
-  }
-  if (status === "error") {
-    return <AlertCircle className="h-3.5 w-3.5 shrink-0 text-error" />;
-  }
-  if (status === "pending") {
-    return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ai-text" />;
-  }
-  return <Bot className="h-3.5 w-3.5 shrink-0 text-ai-text" />;
-}
-
 interface RunSubscriberProps {
   runId: string;
   accessToken: string;
-  onStatus: (
-    runId: string,
-    patch: { content?: string; status?: ChatMessage["status"] },
-  ) => void;
   onComplete: (
     runId: string,
     summary: string | undefined,
@@ -595,12 +560,14 @@ interface RunSubscriberProps {
 function RunSubscriber({
   runId,
   accessToken,
-  onStatus,
   onComplete,
 }: RunSubscriberProps) {
-  const { run, error } = useRealtimeRun<typeof designAgentTask>(runId, {
+  const completedRef = useRef(false);
+  const { error } = useRealtimeRun<typeof designAgentTask>(runId, {
     accessToken,
     onComplete: (completedRun, err) => {
+      if (completedRef.current) return;
+      completedRef.current = true;
       const summary =
         readMetadataString(completedRun?.metadata, "planSummary") ??
         readMetadataString(completedRun?.metadata, "message");
@@ -609,20 +576,10 @@ function RunSubscriber({
     },
   });
 
-  const statusMessage = run?.metadata
-    ? readMetadataString(run.metadata, "message")
-    : undefined;
-
   useEffect(() => {
-    if (statusMessage) {
-      onStatus(runId, { content: statusMessage, status: "pending" });
-    }
-  }, [statusMessage, onStatus, runId]);
-
-  useEffect(() => {
-    if (error) {
-      onComplete(runId, error.message, "error");
-    }
+    if (!error || completedRef.current) return;
+    completedRef.current = true;
+    onComplete(runId, error.message, "error");
   }, [error, onComplete, runId]);
 
   return null;
@@ -762,7 +719,10 @@ function ChatTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+      >
         {messages.length === 0 ? (
           <ChatEmptyState />
         ) : (
@@ -830,6 +790,10 @@ interface ChatMessageItemProps {
 
 function ChatMessageItem({ message, isOwn }: ChatMessageItemProps) {
   const time = formatChatTime(message.timestamp);
+  const isAi = message.senderId === AI_AGENT_USER_ID;
+  const isSystem = message.role === "system";
+  const senderLabel = isOwn ? "You" : message.sender;
+
   return (
     <li
       className={cn(
@@ -838,20 +802,32 @@ function ChatMessageItem({ message, isOwn }: ChatMessageItemProps) {
       )}
     >
       <div className="flex items-center gap-2 text-[11px]">
-        <span className="font-medium text-copy-secondary">
-          {isOwn ? "You" : message.sender}
+        <span
+          className={cn(
+            "font-medium",
+            isAi ? "text-ai-text" : "text-copy-secondary",
+          )}
+        >
+          {senderLabel}
         </span>
         <span className="text-copy-faint">{time}</span>
       </div>
       <div
         className={cn(
-          "max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere text-copy-primary",
+          "flex max-w-[85%] items-start gap-1.5 rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere",
           isOwn
-            ? "border border-brand/40 bg-brand-dim"
-            : "border border-surface-border bg-elevated",
+            ? "bg-accent-chat text-[var(--bg-base)]"
+            : isSystem
+              ? "border border-error/40 bg-elevated text-error"
+              : isAi
+                ? "border border-surface-border bg-elevated text-copy-primary"
+                : "border border-surface-border bg-elevated text-copy-primary",
         )}
       >
-        {message.content}
+        {isAi ? (
+          <Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ai-text" />
+        ) : null}
+        <span>{message.content}</span>
       </div>
     </li>
   );
