@@ -46,3 +46,6 @@ next-env.d.ts
 skills-lock.json
 
 /app/generated/prisma
+
+# trigger.dev local dev/build artifacts
+/.trigger/
