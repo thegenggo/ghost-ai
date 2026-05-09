@@ -1,4 +1,5 @@
 import type { AiStatusEvent } from "@/lib/ai-agent";
+import type { AiChatEvent } from "@/types/tasks";
 
 declare global {
   interface Liveblocks {
@@ -16,7 +17,7 @@ declare global {
       };
     };
 
-    RoomEvent: AiStatusEvent;
+    RoomEvent: AiStatusEvent | AiChatEvent;
   }
 }
 

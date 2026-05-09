@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useRef,
   useState,
 } from "react";
 import {
@@ -15,11 +16,16 @@ import {
   Download,
   FileText,
   Loader2,
+  MessageSquare,
   Send,
   Sparkles,
   X,
 } from "lucide-react";
-import { useEventListener } from "@liveblocks/react/suspense";
+import {
+  useBroadcastEvent,
+  useEventListener,
+} from "@liveblocks/react/suspense";
+import { useSelf } from "@liveblocks/react";
 import { useRealtimeRun } from "@trigger.dev/react-hooks";
 
 import { Button } from "@/components/ui/button";
@@ -36,7 +42,12 @@ import {
 } from "@/lib/ai-agent";
 import { cn } from "@/lib/utils";
 import type { designAgentTask } from "@/trigger/design-agent";
-import { parseAiStatusFeedMessage } from "@/types/tasks";
+import {
+  AI_CHAT_EVENT_TYPE,
+  parseAiChatMessage,
+  parseAiStatusFeedMessage,
+  type AiChatMessage,
+} from "@/types/tasks";
 
 interface AiSidebarProps {
   isOpen: boolean;
@@ -75,12 +86,27 @@ const ACCENT_BUTTON_CLASSES =
 
 export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
   const [feedState, setFeedState] = useState<FeedState | null>(null);
+  const [chatMessages, setChatMessages] = useState<AiChatMessage[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const broadcast = useBroadcastEvent();
+  const self = useSelf();
 
   useEventListener(({ event }) => {
-    if (event.type !== AI_STATUS_EVENT_TYPE) return;
-    const parsed = parseAiStatusFeedMessage({ text: event.message });
-    if (!parsed) return;
-    setFeedState({ level: event.level, text: parsed.text ?? "" });
+    if (event.type === AI_STATUS_EVENT_TYPE) {
+      const parsed = parseAiStatusFeedMessage({ text: event.message });
+      if (!parsed) return;
+      setFeedState({ level: event.level, text: parsed.text ?? "" });
+      return;
+    }
+    if (event.type === AI_CHAT_EVENT_TYPE) {
+      const validated = parseAiChatMessage(event.message);
+      if (!validated) return;
+      setChatMessages((prev) =>
+        prev.some((msg) => msg.id === validated.id)
+          ? prev
+          : [...prev, validated],
+      );
+    }
   });
 
   useEffect(() => {
@@ -94,6 +120,52 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
 
   const isAiActive =
     feedState?.level === "start" || feedState?.level === "processing";
+
+  const senderId = self?.id ?? null;
+  const senderName = self?.info?.name ?? null;
+  const canChat = Boolean(senderId && senderName);
+
+  const sendChatMessage = useCallback(
+    (rawContent: string) => {
+      const trimmed = rawContent.trim();
+      if (!trimmed) return false;
+      if (!senderId || !senderName) {
+        setChatError("Connecting to room...");
+        return false;
+      }
+      const message: AiChatMessage = {
+        id: `${senderId}-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
+        senderId,
+        sender: senderName,
+        role: "user",
+        content: trimmed,
+        timestamp: Date.now(),
+      };
+      const validated = parseAiChatMessage(message);
+      if (!validated) {
+        setChatError("Message could not be sent");
+        return false;
+      }
+      try {
+        broadcast({ type: AI_CHAT_EVENT_TYPE, message: validated });
+      } catch (caught) {
+        const text =
+          caught instanceof Error ? caught.message : "Failed to send message";
+        setChatError(text);
+        return false;
+      }
+      setChatMessages((prev) =>
+        prev.some((msg) => msg.id === validated.id)
+          ? prev
+          : [...prev, validated],
+      );
+      setChatError(null);
+      return true;
+    },
+    [broadcast, senderId, senderName],
+  );
 
   return (
     <aside
@@ -118,6 +190,9 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
             <TabsTrigger value="architect" className={TAB_TRIGGER_CLASSES}>
               AI Architect
             </TabsTrigger>
+            <TabsTrigger value="chat" className={TAB_TRIGGER_CLASSES}>
+              Chat
+            </TabsTrigger>
             <TabsTrigger value="specs" className={TAB_TRIGGER_CLASSES}>
               Specs
             </TabsTrigger>
@@ -128,6 +203,19 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
           className="flex min-h-0 flex-1 flex-col"
         >
           <ArchitectTab projectId={projectId} isAiActive={isAiActive} />
+        </TabsContent>
+        <TabsContent
+          value="chat"
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <ChatTab
+            messages={chatMessages}
+            currentSenderId={senderId}
+            canChat={canChat}
+            error={chatError}
+            onSend={sendChatMessage}
+            onDismissError={() => setChatError(null)}
+          />
         </TabsContent>
         <TabsContent
           value="specs"
@@ -615,6 +703,184 @@ function SpecsTab({ isAiActive }: SpecsTabProps) {
       </div>
     </div>
   );
+}
+
+interface ChatTabProps {
+  messages: AiChatMessage[];
+  currentSenderId: string | null;
+  canChat: boolean;
+  error: string | null;
+  onSend: (content: string) => boolean;
+  onDismissError: () => void;
+}
+
+function ChatTab({
+  messages,
+  currentSenderId,
+  canChat,
+  error,
+  onSend,
+  onDismissError,
+}: ChatTabProps) {
+  const [draft, setDraft] = useState("");
+  const inputId = useId();
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = listRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [messages.length]);
+
+  const submit = useCallback(() => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    const success = onSend(trimmed);
+    if (success) {
+      setDraft("");
+    }
+  }, [draft, onSend]);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submit();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submit();
+    }
+  };
+
+  const handleChange = (value: string) => {
+    setDraft(value);
+    if (error) onDismissError();
+  };
+
+  const sendDisabled = !canChat || draft.trim().length === 0;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {messages.length === 0 ? (
+          <ChatEmptyState />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {messages.map((message) => (
+              <ChatMessageItem
+                key={message.id}
+                message={message}
+                isOwn={message.senderId === currentSenderId}
+              />
+            ))}
+          </ul>
+        )}
+        {error ? (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-error">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            {error}
+          </p>
+        ) : null}
+      </div>
+      <form
+        onSubmit={handleSubmit}
+        className="shrink-0 border-t border-surface-border px-4 py-3"
+      >
+        <label htmlFor={inputId} className="sr-only">
+          Send a chat message
+        </label>
+        <div className="flex items-end gap-2">
+          <Textarea
+            id={inputId}
+            value={draft}
+            onChange={(event) => handleChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              canChat
+                ? "Message your room..."
+                : "Connecting to room..."
+            }
+            rows={1}
+            disabled={!canChat}
+            className="min-h-[72px] max-h-[160px] resize-none text-copy-primary"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            aria-label="Send chat message"
+            disabled={sendDisabled}
+            className={ACCENT_BUTTON_CLASSES}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+        <p className="mt-2 text-[11px] text-copy-faint">
+          Press Enter to send, Shift + Enter for a new line.
+        </p>
+      </form>
+    </div>
+  );
+}
+
+interface ChatMessageItemProps {
+  message: AiChatMessage;
+  isOwn: boolean;
+}
+
+function ChatMessageItem({ message, isOwn }: ChatMessageItemProps) {
+  const time = formatChatTime(message.timestamp);
+  return (
+    <li
+      className={cn(
+        "flex flex-col gap-1",
+        isOwn ? "items-end" : "items-start",
+      )}
+    >
+      <div className="flex items-center gap-2 text-[11px]">
+        <span className="font-medium text-copy-secondary">
+          {isOwn ? "You" : message.sender}
+        </span>
+        <span className="text-copy-faint">{time}</span>
+      </div>
+      <div
+        className={cn(
+          "max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap wrap-anywhere text-copy-primary",
+          isOwn
+            ? "border border-brand/40 bg-brand-dim"
+            : "border border-surface-border bg-elevated",
+        )}
+      >
+        {message.content}
+      </div>
+    </li>
+  );
+}
+
+function ChatEmptyState() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-2 py-6 text-center">
+      <span
+        aria-hidden="true"
+        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-subtle text-copy-secondary"
+      >
+        <MessageSquare className="h-6 w-6" />
+      </span>
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium text-copy-primary">No messages yet</p>
+        <p className="text-xs text-copy-muted">
+          Start a conversation with everyone in this room.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function formatChatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function DemoSpecCard() {
