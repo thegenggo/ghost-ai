@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { shallow, useOthersMapped } from "@liveblocks/react/suspense";
 import { useViewport } from "@xyflow/react";
+import { Loader2 } from "lucide-react";
 
 export function LiveCursors() {
   const { userId } = useAuth();
@@ -14,6 +15,7 @@ export function LiveCursors() {
       name: other.info?.name ?? "",
       color: other.info?.color ?? "#52A8FF",
       cursor: other.presence.cursor,
+      thinking: other.presence.thinking ?? false,
     }),
     shallow,
   );
@@ -31,6 +33,7 @@ export function LiveCursors() {
             y={screenY}
             name={info.name}
             color={info.color}
+            thinking={info.thinking}
           />
         );
       })}
@@ -43,9 +46,10 @@ interface CursorProps {
   y: number;
   name: string;
   color: string;
+  thinking: boolean;
 }
 
-function Cursor({ x, y, name, color }: CursorProps) {
+function Cursor({ x, y, name, color, thinking }: CursorProps) {
   return (
     <div
       className="absolute left-0 top-0 select-none"
@@ -72,10 +76,13 @@ function Cursor({ x, y, name, color }: CursorProps) {
       </svg>
       {name ? (
         <div
-          className="ml-3 -mt-1 inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium text-white shadow-sm"
+          className="ml-3 -mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium text-white shadow-sm"
           style={{ backgroundColor: color }}
         >
-          {name}
+          {thinking ? (
+            <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+          ) : null}
+          <span>{name}</span>
         </div>
       ) : null}
     </div>

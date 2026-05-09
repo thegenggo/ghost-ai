@@ -19,6 +19,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useEventListener } from "@liveblocks/react/suspense";
 import { useRealtimeRun } from "@trigger.dev/react-hooks";
 
 import { Button } from "@/components/ui/button";
@@ -29,8 +30,13 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AI_STATUS_EVENT_TYPE,
+  type AiStatusLevel,
+} from "@/lib/ai-agent";
 import { cn } from "@/lib/utils";
 import type { designAgentTask } from "@/trigger/design-agent";
+import { parseAiStatusFeedMessage } from "@/types/tasks";
 
 interface AiSidebarProps {
   isOpen: boolean;
@@ -50,6 +56,11 @@ interface ActiveRun {
   accessToken: string;
 }
 
+interface FeedState {
+  level: AiStatusLevel;
+  text: string;
+}
+
 const STARTER_PROMPTS: readonly string[] = [
   "Design an e-commerce backend",
   "Create a chat app architecture",
@@ -63,6 +74,27 @@ const ACCENT_BUTTON_CLASSES =
   "bg-brand text-white hover:bg-brand/90 dark:hover:bg-brand/90";
 
 export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
+  const [feedState, setFeedState] = useState<FeedState | null>(null);
+
+  useEventListener(({ event }) => {
+    if (event.type !== AI_STATUS_EVENT_TYPE) return;
+    const parsed = parseAiStatusFeedMessage({ text: event.message });
+    if (!parsed) return;
+    setFeedState({ level: event.level, text: parsed.text ?? "" });
+  });
+
+  useEffect(() => {
+    if (!feedState) return;
+    if (feedState.level === "start" || feedState.level === "processing") {
+      return;
+    }
+    const timer = window.setTimeout(() => setFeedState(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [feedState]);
+
+  const isAiActive =
+    feedState?.level === "start" || feedState?.level === "processing";
+
   return (
     <aside
       aria-label="AI workspace"
@@ -76,6 +108,7 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
       )}
     >
       <SidebarHeader onClose={onClose} />
+      {feedState ? <FeedStatusBanner state={feedState} /> : null}
       <Tabs
         defaultValue="architect"
         className="flex min-h-0 flex-1 flex-col gap-0"
@@ -94,17 +127,71 @@ export function AiSidebar({ isOpen, onClose, projectId }: AiSidebarProps) {
           value="architect"
           className="flex min-h-0 flex-1 flex-col"
         >
-          <ArchitectTab projectId={projectId} />
+          <ArchitectTab projectId={projectId} isAiActive={isAiActive} />
         </TabsContent>
         <TabsContent
           value="specs"
           className="flex min-h-0 flex-1 flex-col"
         >
-          <SpecsTab />
+          <SpecsTab isAiActive={isAiActive} />
         </TabsContent>
       </Tabs>
     </aside>
   );
+}
+
+interface FeedStatusBannerProps {
+  state: FeedState;
+}
+
+function FeedStatusBanner({ state }: FeedStatusBannerProps) {
+  const isActive = state.level === "start" || state.level === "processing";
+  const fallback =
+    state.level === "complete"
+      ? "Design ready"
+      : state.level === "error"
+      ? "AI ran into an issue"
+      : "Working...";
+  const text = state.text || fallback;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "shrink-0 border-b border-surface-border px-4 py-2",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
+          state.level === "error"
+            ? "border-error/40 text-error"
+            : state.level === "complete"
+            ? "border-success/40 text-success"
+            : "border-ai/40 text-ai-text",
+        )}
+      >
+        <FeedStatusIcon level={state.level} />
+        <span className="truncate">{text}</span>
+        {isActive ? (
+          <span className="sr-only">Generating</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function FeedStatusIcon({ level }: { level: AiStatusLevel }) {
+  if (level === "complete") {
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />;
+  }
+  if (level === "error") {
+    return <AlertCircle className="h-3.5 w-3.5 shrink-0" />;
+  }
+  if (level === "start") {
+    return <Bot className="h-3.5 w-3.5 shrink-0" />;
+  }
+  return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />;
 }
 
 interface SidebarHeaderProps {
@@ -144,9 +231,10 @@ function SidebarHeader({ onClose }: SidebarHeaderProps) {
 
 interface ArchitectTabProps {
   projectId?: string;
+  isAiActive: boolean;
 }
 
-function ArchitectTab({ projectId }: ArchitectTabProps) {
+function ArchitectTab({ projectId, isAiActive }: ArchitectTabProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [activeRun, setActiveRun] = useState<ActiveRun | null>(null);
@@ -272,7 +360,7 @@ function ArchitectTab({ projectId }: ArchitectTabProps) {
   };
 
   const isReady = Boolean(projectId);
-  const isBusy = isSubmitting || Boolean(activeRun);
+  const isBusy = isSubmitting || Boolean(activeRun) || isAiActive;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -500,16 +588,25 @@ function ArchitectEmptyState({ onSelectPrompt }: ArchitectEmptyStateProps) {
   );
 }
 
-function SpecsTab() {
+interface SpecsTabProps {
+  isAiActive: boolean;
+}
+
+function SpecsTab({ isAiActive }: SpecsTabProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-surface-border px-4 py-3">
         <Button
           type="button"
           size="default"
+          disabled={isAiActive}
           className={cn(ACCENT_BUTTON_CLASSES, "w-full")}
         >
-          <Sparkles className="h-4 w-4" />
+          {isAiActive ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
           Generate Spec
         </Button>
       </div>
